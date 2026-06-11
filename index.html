@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Flui | Sistema POS en la nube con pedidos remotos. Elimina las filas, automatiza operaciones y mejora la experiencia de tus clientes.">
+    <title>Flui | Sistema POS - Elimina Colas, Aumenta Ventas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <nav class="nav-bar">
+        <a href="http://localhost/project/login.php">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 256 256">
+                <path
+                    d="M230.14,58.87A8,8,0,0,0,224,56H62.68L56.6,22.57A8,8,0,0,0,48.73,16H24a8,8,0,0,0,0,16h18L67.56,172.29a24,24,0,0,0,5.33,11.27,28,28,0,1,0,44.4,8.44h45.42A27.75,27.75,0,0,0,160,204a28,28,0,1,0,28-28H91.17a8,8,0,0,1-7.87-6.57L80.13,152h116a24,24,0,0,0,23.61-19.71l12.16-66.86A8,8,0,0,0,230.14,58.87ZM104,204a12,12,0,1,1-12-12A12,12,0,0,1,104,204Zm96,0a12,12,0,1,1-12-12A12,12,0,0,1,200,204Zm4-74.57A8,8,0,0,1,196.1,136H77.22L65.59,72H214.41Z">
+                </path>
+            </svg>
+            Quiero pedir
+        </a>
+        <a href="http://localhost/project/login.php">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 256 256">
+                <path
+                    d="M232,96a7.89,7.89,0,0,0-.3-2.2L217.35,43.6A16.07,16.07,0,0,0,202,32H54A16.07,16.07,0,0,0,38.65,43.6L24.31,93.8A7.89,7.89,0,0,0,24,96h0v16a40,40,0,0,0,16,32v72a8,8,0,0,0,8,8H208a8,8,0,0,0,8-8V144a40,40,0,0,0,16-32V96ZM54,48H202l11.42,40H42.61Zm50,56h48v8a24,24,0,0,1-48,0Zm-16,0v8a24,24,0,0,1-35.12,21.26,7.88,7.88,0,0,0-1.82-1.06A24,24,0,0,1,40,112v-8ZM200,208H56V151.2a40.57,40.57,0,0,0,8,.8,40,40,0,0,0,32-16,40,40,0,0,0,64,0,40,40,0,0,0,32,16,40.57,40.57,0,0,0,8-.8Zm4.93-75.8a8.08,8.08,0,0,0-1.8,1.05A24,24,0,0,1,168,112v-8h48v8A24,24,0,0,1,204.93,132.2Z">
+                </path>
+            </svg>
+            Voy a despachar
+        </a>
+    </nav>
+    <header class="header">
+        <h1>Flui</h1>
+        <p>Acaba con las filas. Automatiza tu negocio.</p>
+    </header>
+    <main>
+        <section class="about">
+            <h2>¿Qué hacemos?</h2>
+            <p>
+                Somos un <b>Punto de Venta</b> en la nube. Integramos un módulo de pedidos remotos, para que tus
+                clientes pidan con antelación, tú prepares sin caos operativo, y ambos ganen tiempo. <b>Sin colas. Sin
+                    estrés.</b>
+            </p>
+            <div class="stats">
+                <article class="stats">
+                    <h3>85%</h3>
+                    <p>Menos tiempo de espera</p>
+                </article>
+                <article class="stats">
+                    <h3>45s</h3>
+                    <p>Por cliente atendido</p>
+                </article>
+                <article class="stats">
+                    <h3>3x</h3>
+                    <p>Más pedidos procesados</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="modules">
+            <h2>Nuestros módulos</h2>
+            <div>
+                <article class="modules-article">
+                    <h3>Punto de Venta</h3>
+                    <p>
+                        Gestiona tus ventas, inventario y pagos en tiempo real. Control total de tu operación, desde el
+                        mostrador hasta las métricas de tu negocio.
+                    </p>
+                    <ul>
+                        <li>✓ Inventario automático</li>
+                        <li>✓ Reportes en vivo</li>
+                        <li>✓ Reportes en vivo</li>
+                    </ul>
+                </article>
+                <article class="modules-article">
+                    <h3>Pedidos Remotos</h3>
+                    <p>
+                        Tus clientes piden digitalmente. Tú recibes notificaciones al instante. Ellos esperan menos, tú
+                        trabajas mejor. Adiós al caos de pedidos verbales.
+                    </p>
+                    <ul>
+                        <li>✓ Notificaciones en vivo</li>
+                        <li>✓ Rastreo de pedidos</li>
+                        <li>✓ Historial de órdenes</li>
+                    </ul>
+                </article>
+            </div>
+        </section>
+
+        <!-- <section class="contact" id="business">
+            <div>
+                <h2>Transforma tu cafetería en 30 días</h2>
+                <p>Únete a negocios que ya eliminaron el caos operativo. Aumenta tus ventas con Flui.</p>
+                <form action="">
+                    <label for="business-name">
+                        Nombre de tu negocio
+                    </label>
+                    <input id="business-name" name="business-name" type="text" placeholder="Ej: Cafetería La Mona"
+                        required>
+
+                    <label for="daily-orders">
+                        ¿Cuántos pedidos atienden diariamente?
+                    </label>
+                    <select name="daily-orders" id="daily-orders" required>
+                        <option value="">Selecciona tu rango</option>
+                        <option value="">10 a 50 pedidos</option>
+                        <option value="">51 a 150 pedidos</option>
+                        <option value="">151 a 300 pedidos</option>
+                        <option value="">Más de 300 pedidos</option>
+                    </select>
+                    <label for="contact-email">
+                        Correo electrónico de contacto
+                    </label>
+                    <input type="email" name="contact-email" id="contact-email"
+                        placeholder="Ej: contacto@cafeterialamona.com" required>
+                    <button type="submit">
+                        Quiero Aumentar Mis Ventas
+                    </button>
+                </form>
+                <p class="plus">
+                    ✓ Demo gratis • Sin tarjeta de crédito • Respuesta en 24 horas
+                </p>
+            </div>
+        </section> -->
+    </main>
+
+    <footer class="finish">
+        <p>Flui | Punto de venta en la nube</p>
+        <!-- <p>Construido en Colombia</p> -->
+        <div>
+            <p>Hecho por:</p>
+            <ul>
+                <li><a href="">Hernán</a></li>
+                <li><a href="">Jeferson</a></li>
+                <li><a href="http://github.com/jstevenfm" target="_blank">Jeisson</a></li>
+                <li><a href="">Oscar</a></li>
+            </ul>
+        </div>
+    </footer>
+</body>
+
+</html>
