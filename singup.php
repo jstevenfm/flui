@@ -8,31 +8,31 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST') {
     $email_confirm = strtolower(trim($_POST["repeat-email"] ?? ''));
     $password = $_POST["password"] ?? '';
     $password_confirm = $_POST["repeat-password"] ?? '';
-    // 1. Capturamos el rol enviado por el formulario
+   
     $rol = trim($_POST["role"] ?? '');
 
-    // Roles permitidos en el sistema (Lista blanca para seguridad)
+  
     $roles_permitidos = ['cliente', 'admin'];
 
     // Validaciones del Backend
     if (empty($nombre) || empty($email) || empty($password) || empty($rol)) {
-        // 2. Validamos que el rol no venga vacío
+        
         $mensaje = "<div class='alert alert-danger'>Por favor, rellena todos los campos, incluido el tipo de usuario.</div>";
     } elseif (!in_array($rol, $roles_permitidos)) {
-        // 3. Validamos que el rol sea uno de los esperados (evita manipulaciones del HTML)
+        
         $mensaje = "<div class='alert alert-danger'>El tipo de usuario seleccionado no es válido.</div>";
     } elseif ($email !== $email_confirm) {
         $mensaje = "<div class='alert alert-danger'>Los correos electrónicos no coinciden.</div>";
     } elseif ($password !== $password_confirm) {
         $mensaje = "<div class='alert alert-danger'>Las contraseñas no coinciden.</div>";
     } else {
-        // Encriptar contraseña de forma segura
+       
         $password_encriptada = password_hash($password, PASSWORD_BCRYPT);
 
         try {
-            // 4. Cambiamos el valor estático 'cliente' por el marcador de posición ?
+           
             $stmt = $pdo->prepare("INSERT INTO usuarios (usuario, email, password, rol) VALUES (?, ?, ?, ?)");
-            // 5. Pasamos la variable $rol en la ejecución
+           
             $stmt->execute([$nombre, $email, $password_encriptada, $rol]);
             
             $mensaje = "<div class='alert alert-success'>¡Registro exitoso! <a href='login.php' class='link-green' style='text-decoration: underline;'>Inicia sesión aquí</a></div>";

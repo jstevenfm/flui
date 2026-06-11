@@ -3,12 +3,12 @@ session_start();
 require 'conexion.php';
 $mensaje = '';
 
-// Si ya está logueado, redirigir según su rol guardado
+
 if (isset($_SESSION['usuario_id']) && isset($_SESSION['usuario_rol'])) {
     if ($_SESSION['usuario_rol'] === 'admin') {
-        header("Location: admin_dashboard.php"); // Cambia por tu archivo de administrador
+        header("Location: admin_dashboard.php"); 
     } else {
-        header("Location: password.php"); // O la página principal del cliente/pos
+        header("Location: password.php"); 
     }
     exit;
 }
@@ -23,16 +23,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $user = $stmt->fetch();
 
         if ($user && password_verify($password, $user['password'])) {
-            // Guardar datos clave en la sesión
+            
             $_SESSION['usuario_id'] = $user['id'];
             $_SESSION['usuario_nombre'] = $user['usuario'];
-            $_SESSION['usuario_rol'] = $user['rol']; // <--- Guardamos el rol aquí
+            $_SESSION['usuario_rol'] = $user['rol']; 
 
-            // Lógica de redirección según el rol
+            
             if ($_SESSION['usuario_rol'] === 'admin') {
-                header("Location: admin_dashboard.php"); // Cambia por tu vista de administrador
+                header("Location: admin_dashboard.php"); 
             } else {
-                header("Location: password.php"); // Cambia por tu vista de cliente o módulo POS
+                header("Location: password.php"); 
             }
             exit;
         } else {
