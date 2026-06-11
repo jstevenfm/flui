@@ -2,7 +2,7 @@
 session_start();
 require 'conexion.php';
 
-// Filtro de seguridad perimetral: si no estás logueado, vas afuera [cite: 68]
+
 if (!isset($_SESSION['usuario_id'])) {
     header("Location: login.php");
     exit;
@@ -15,16 +15,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password_nueva = $_POST['password_nueva'];
 
     if (!empty($password_actual) && !empty($password_nueva)) {
-        // Consultar hash actual del usuario en sesión [cite: 66]
+       
         $stmt = $pdo->prepare("SELECT password FROM usuarios WHERE id = ?");
         $stmt->execute([$_SESSION['usuario_id']]);
         $user = $stmt->fetch();
 
-        // Verificar si la clave actual es correcta [cite: 66]
+
         if ($user && password_verify($password_actual, $user['password'])) {
             $nueva_encriptada = password_hash($password_nueva, PASSWORD_BCRYPT);
             
-            // Actualizar [cite: 66, 69]
+   
             $update_stmt = $pdo->prepare("UPDATE usuarios SET password = ? WHERE id = ?");
             $update_stmt->execute([$nueva_encriptada, $_SESSION['usuario_id']]);
             

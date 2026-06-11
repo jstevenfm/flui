@@ -1,4 +1,4 @@
-/* Variables Globales */
+
 :root {
     --bg-dark: #1a1645;
     --card-bg: linear-gradient(145deg, #322b6e, #231d52);
@@ -9,7 +9,7 @@
     --white: #ffffff;
 }
 
-/* Reset y Estilos Base */
+
 * {
     margin: 0;
     padding: 0;
@@ -37,7 +37,7 @@ body {
     max-width: 1100px;
 }
 
-/* --- ESTILOS COMUNES --- */
+
 .card {
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
     transition: transform 0.3s ease;
@@ -98,7 +98,7 @@ a.singup:hover {
     text-decoration: underline;
 }
 
-/* --- ESPECÍFICOS MÓDULO 1 --- */
+
 .card {
     background: var(--card-bg);
     width: 380px;
