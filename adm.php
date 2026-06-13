@@ -137,6 +137,81 @@
             <a href="#"><i class="fa-solid fa-ellipsis"></i></a>
         </nav>
     </div>
+<div id="new-order-modal" class="modal-overlay">
+    <div class="modal-container">
+        
+        <header class="modal-header">
+            <div class="modal-title">
+                <i class="fa-solid fa-cart-plus"></i>
+                <div>
+                    <h3>Nueva Orden</h3>
+                    <p id="order-type-label">Modo: Venta Rápida</p>
+                </div>
+            </div>
+            <button class="close-modal-btn" id="close-order-modal">&times;</button>
+        </header>
+
+        <div class="modal-body">
+            
+            <div class="catalog-column">
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="product-search" placeholder="Buscar producto por nombre o código...">
+                </div>
+                
+                <div class="products-grid" id="products-grid">
+                    <div class="product-item" data-id="1">
+                        <div class="product-info">
+                            <h4>Hamburguesa Flui Double</h4>
+                            <span class="product-stock">Stock: 50 u.</span>
+                        </div>
+                        <div class="product-footer">
+                            <span class="product-price">$12.50</span>
+                            <button class="add-product-btn"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </div>
+                    <div class="product-item" data-id="2">
+                        <div class="product-info">
+                            <h4>Papas Fritas Medianas</h4>
+                            <span class="product-stock">Stock: 100 u.</span>
+                        </div>
+                        <div class="product-footer">
+                            <span class="product-price">$4.00</span>
+                            <button class="add-product-btn"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cart-column">
+                <h4>Resumen del Pedido</h4>
+                
+                <div class="cart-items-container" id="cart-items-container">
+                    <div class="empty-cart-notice">
+                        <i class="fa-solid fa-basket-shopping"></i>
+                        <p>El carrito está vacío</p>
+                    </div>
+                </div>
+
+                <div class="cart-summary">
+                    <div class="summary-row">
+                        <span>Subtotal</span>
+                        <span id="summary-subtotal">$0.00</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Total</span>
+                        <span id="summary-total">$0.00</span>
+                    </div>
+                    <button class="btn-checkout" id="btn-submit-order">
+                        <i class="fa-solid fa-cash-register"></i> Completar Venta
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
 
 </body>
+
 </html>
