@@ -212,6 +212,38 @@
     </div>
 </div>
 
+<script>
+    // Seleccionar los elementos del DOM
+    const openModalBtn = document.querySelector('.btn-primary'); // Tu botón "New Order"
+    const closeModalBtn = document.getElementById('close-order-modal');
+    const modalOverlay = document.getElementById('new-order-modal');
+
+    // Función para abrir el modal
+    if (openModalBtn && modalOverlay) {
+        openModalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            modalOverlay.classList.add('active');
+        });
+    }
+
+    // Función para cerrar el modal con la "X"
+    if (closeModalBtn && modalOverlay) {
+        closeModalBtn.addEventListener('click', () => {
+            modalOverlay.classList.remove('active');
+        });
+    }
+
+    // Función para cerrar el modal si se hace clic en el fondo oscurecido
+    if (modalOverlay) {
+        modalOverlay.addEventListener('click', (e) => {
+            // Si el clic fue en el fondo (.modal-overlay) y no dentro de la tarjeta
+            if (e.target === modalOverlay) {
+                modalOverlay.classList.remove('active');
+            }
+        });
+    }
+</script>
+
 </body>
 
 </html>
