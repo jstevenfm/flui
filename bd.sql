@@ -29,3 +29,7 @@ CREATE TABLE orden_detalles (
     FOREIGN KEY (producto_id) REFERENCES productos(id)
 );
 
+--agrega tres columnas para modificar base de datos usuarios , para soportar esta logica 
+ALTER TABLE usuarios 
+ADD COLUMN reset_token_hash VARCHAR(64) NULL DEFAULT NULL,
+ADD COLUMN reset_token_expires_at DATETIME NULL DEFAULT NULL;
