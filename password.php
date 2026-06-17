@@ -2,35 +2,61 @@
 session_start();
 require 'conexion.php';
 
-
+// 1. Validar autenticación
 if (!isset($_SESSION['usuario_id'])) {
     header("Location: login.php");
     exit;
 }
 
+// 2. Generar Token CSRF si no existe
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $mensaje = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $password_actual = $_POST['password_actual'];
-    $password_nueva = $_POST['password_nueva'];
+    $password_actual = $_POST['password_actual'] ?? '';
+    $password_nueva = $_POST['password_nueva'] ?? '';
+    $password_confirmar = $_POST['password_confirmar'] ?? '';
+    $csrf_token_post = $_POST['csrf_token'] ?? '';
 
-    if (!empty($password_actual) && !empty($password_nueva)) {
-       
-        $stmt = $pdo->prepare("SELECT password FROM usuarios WHERE id = ?");
-        $stmt->execute([$_SESSION['usuario_id']]);
-        $user = $stmt->fetch();
+    // 3. Validar Token CSRF
+    if (!hash_equals($_SESSION['csrf_token'], $csrf_token_post)) {
+        die("<div class='alert alert-danger'>Error de validación de seguridad (CSRF).</div>");
+    }
 
-
-        if ($user && password_verify($password_actual, $user['password'])) {
-            $nueva_encriptada = password_hash($password_nueva, PASSWORD_BCRYPT);
-            
-   
-            $update_stmt = $pdo->prepare("UPDATE usuarios SET password = ? WHERE id = ?");
-            $update_stmt->execute([$nueva_encriptada, $_SESSION['usuario_id']]);
-            
-            $mensaje = "<div class='alert alert-success'>Contraseña actualizada correctamente.</div>";
+    if (!empty($password_actual) && !empty($password_nueva) && !empty($password_confirmar)) {
+        
+        // 4. Validar que la nueva contraseña coincida con la confirmación
+        if ($password_nueva !== $password_confirmar) {
+            $mensaje = "<div class='alert alert-danger'>La nueva contraseña y su confirmación no coinciden.</div>";
+        } 
+        // 5. Validar políticas de complejidad (Min 8 caracteres, letras y números)
+        define('MIN_LENGHT', 8);
+        if (strlen($password_nueva) < MIN_LENGHT || !preg_match('/[A-Za-z]/', $password_nueva) || !preg_match('/[0-9]/', $password_nueva)) {
+            $mensaje = "<div class='alert alert-danger'>La nueva contraseña debe tener al menos 8 caracteres, incluyendo letras y números.</div>";
         } else {
-            $mensaje = "<div class='alert alert-danger'>La contraseña actual es incorrecta.</div>";
+            
+            // Buscar la contraseña actual en la BD
+            $stmt = $pdo->prepare("SELECT password FROM usuarios WHERE id = ?");
+            $stmt->execute([$_SESSION['usuario_id']]);
+            $user = $stmt->fetch();
+
+            if ($user && password_verify($password_actual, $user['password'])) {
+                // Usar PASSWORD_DEFAULT (PHP actualizará automáticamente el algoritmo si BCRYPT queda obsoleto)
+                $nueva_encriptada = password_hash($password_nueva, PASSWORD_DEFAULT);
+                
+                $update_stmt = $pdo->prepare("UPDATE usuarios SET password = ? WHERE id = ?");
+                $update_stmt->execute([$nueva_encriptada, $_SESSION['usuario_id']]);
+                
+                // 6. Regenerar token CSRF tras éxito para evitar re-envíos
+                $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                
+                $mensaje = "<div class='alert alert-success'>Contraseña actualizada correctamente. Recomendamos iniciar sesión nuevamente.</div>";
+            } else {
+                $mensaje = "<div class='alert alert-danger'>La contraseña actual es incorrecta.</div>";
+            }
         }
     } else {
         $mensaje = "<div class='alert alert-danger'>Por favor, completa todos los campos.</div>";
@@ -70,20 +96,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             <?php echo $mensaje; ?>
 
-            <form class="form-content" id="password-form" method="POST" action="password.php">
-                <div class="input-group">
-                    <label>Contraseña Actual</label>
-                    <input name="password_actual" id="password_actual" type="password" placeholder="Tu contraseña actual" required>
-                </div>
+          <form class="form-content" id="password-form" method="POST" action="password.php">
+    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
 
-                <div class="input-group">
-                    <label>Nueva Contraseña</label>
-                    <input name="password_nueva" id="password_nueva" type="password" placeholder="Mínimo 6-8 caracteres recomendado" required>
-                </div>
+    <div class="input-group">
+        <label>Contraseña Actual</label>
+        <input name="password_actual" id="password_actual" type="password" placeholder="Tu contraseña actual" required>
+    </div>
 
-                <button type="submit" class="btn">Actualizar contraseña &rarr;</button>
-            </form>
-            
+    <div class="input-group">
+        <label>Nueva Contraseña</label>
+        <input name="password_nueva" id="password_nueva" type="password" placeholder="Mínimo 8 caracteres con letras y números" required>
+    </div>
+
+    <div class="input-group">
+        <label>Confirmar Nueva Contraseña</label>
+        <input name="password_confirmar" id="password_confirmar" type="password" placeholder="Repite tu nueva contraseña" required>
+    </div>
+
+    <button type="submit" class="btn">Actualizar contraseña &rarr;</button>
+</form>
             <a class="singup" href="logout.php" style="color: #ff7070;">Cerrar Sesión de Flui</a>
         </section>
 
