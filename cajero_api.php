@@ -69,6 +69,12 @@ switch ($action) {
 // GET ?action=listar — Pedidos activos agrupados por estado
 // -------------------------------------------------------
 function actionListar(PDO $pdo): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido.']);
+        return;
+    }
+
     $stmt = $pdo->prepare("
         SELECT o.id, o.codigo_qr, o.total, o.estado, o.fecha_creacion, o.tipo_pedido,
                u.usuario AS cliente_nombre
@@ -271,7 +277,7 @@ function actionCrearVenta(PDO $pdo, int $cajero_id): void {
     } catch (RuntimeException $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
     } catch (Exception $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         http_response_code(500);
@@ -283,6 +289,12 @@ function actionCrearVenta(PDO $pdo, int $cajero_id): void {
 // GET ?action=listar_productos — Catálogo de productos con categoría
 // -------------------------------------------------------
 function actionListarProductos(PDO $pdo): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido.']);
+        return;
+    }
+
     $stmt = $pdo->query("
         SELECT p.id, p.nombre, p.precio, p.stock, p.imagen, c.id AS categoria_id, c.nombre AS categoria_nombre
         FROM productos p
