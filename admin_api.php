@@ -156,26 +156,213 @@ function actionDashboardStats(PDO $pdo): void {
     ]);
 }
 
-// --- Stubs: se implementarán en slices posteriores ---
-
+// -------------------------------------------------------
+// GET ?action=listar_cajeros — Lista de cajeros (rol='cajero')
+// -------------------------------------------------------
 function actionListarCajeros(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $stmt = $pdo->query("
+        SELECT id, usuario, email, activo
+        FROM usuarios
+        WHERE rol = 'cajero'
+        ORDER BY id DESC
+    ");
+    $cajeros = $stmt->fetchAll();
+
+    echo json_encode([
+        'success' => true,
+        'cajeros' => $cajeros,
+    ]);
 }
 
+// -------------------------------------------------------
+// POST ?action=crear_cajero — Crea un nuevo cajero
+// Body JSON: { usuario, email, password }
+// -------------------------------------------------------
 function actionCrearCajero(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $usuario = trim((string)($input['usuario'] ?? ''));
+    $email = strtolower(trim((string)($input['email'] ?? '')));
+    $password = (string)($input['password'] ?? '');
+
+    // --- Validaciones ---
+    if ($usuario === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El nombre de usuario es obligatorio.']);
+        return;
+    }
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Debe ingresar un correo electrónico válido.']);
+        return;
+    }
+    if (strlen($password) < 6) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'La contraseña debe tener al menos 6 caracteres.']);
+        return;
+    }
+
+    $hash = password_hash($password, PASSWORD_BCRYPT);
+
+    try {
+        $stmt = $pdo->prepare(
+            "INSERT INTO usuarios (usuario, email, password, rol, activo)
+             VALUES (?, ?, ?, 'cajero', 1)"
+        );
+        $stmt->execute([$usuario, $email, $hash]);
+        $id = (int)$pdo->lastInsertId();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cajero creado exitosamente.',
+            'id' => $id,
+        ]);
+    } catch (PDOException $e) {
+        if ($e->getCode() == 23000) {
+            http_response_code(409);
+            echo json_encode(['success' => false, 'error' => 'El correo electrónico ya está registrado.']);
+            return;
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// POST ?action=editar_cajero — Edita cajero existente
+// Body JSON: { id, usuario, email, password? }
+// password opcional: si viene no vacío se actualiza el hash
+// -------------------------------------------------------
 function actionEditarCajero(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $id = (int)($input['id'] ?? 0);
+
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de cajero no válido.']);
+        return;
+    }
+
+    $usuario = trim((string)($input['usuario'] ?? ''));
+    $email = strtolower(trim((string)($input['email'] ?? '')));
+    $password = (string)($input['password'] ?? '');
+
+    // --- Validaciones ---
+    if ($usuario === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El nombre de usuario es obligatorio.']);
+        return;
+    }
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Debe ingresar un correo electrónico válido.']);
+        return;
+    }
+    if ($password !== '' && strlen($password) < 6) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'La contraseña debe tener al menos 6 caracteres.']);
+        return;
+    }
+
+    // Construir SET dinámico: usuario y email siempre; password solo si viene
+    $setClause = 'usuario = ?, email = ?';
+    $params = [$usuario, $email];
+
+    if ($password !== '') {
+        $setClause .= ', password = ?';
+        $params[] = password_hash($password, PASSWORD_BCRYPT);
+    }
+
+    $params[] = $id;
+
+    try {
+        $stmt = $pdo->prepare(
+            "UPDATE usuarios SET {$setClause} WHERE id = ? AND rol = 'cajero'"
+        );
+        $stmt->execute($params);
+
+        if ($stmt->rowCount() === 0) {
+            // WHERE rol='cajero' previene editar admins: si el id no es cajero, rowCount=0
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Cajero no encontrado o no se pueden editar cuentas de administrador.']);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Cajero actualizado exitosamente.',
+        ]);
+    } catch (PDOException $e) {
+        if ($e->getCode() == 23000) {
+            http_response_code(409);
+            echo json_encode(['success' => false, 'error' => 'El correo electrónico ya está registrado.']);
+            return;
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// POST ?action=toggle_cajero — Activa/desactiva un cajero
+// Body JSON: { id, activo: bool }
+// -------------------------------------------------------
 function actionToggleCajero(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $id = (int)($input['id'] ?? 0);
+    // activo puede venir como bool o como 0/1; normalizamos a int
+    $activo = !empty($input['activo']) ? 1 : 0;
+
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de cajero no válido.']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            "UPDATE usuarios SET activo = ? WHERE id = ? AND rol = 'cajero'"
+        );
+        $stmt->execute([$activo, $id]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Cajero no encontrado.']);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Estado actualizado.',
+            'activo' => (bool)$activo,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
 function actionListarCategorias(PDO $pdo): void {
