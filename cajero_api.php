@@ -38,6 +38,14 @@ switch ($action) {
         actionCambiarEstado($pdo, $cajero_id, $transitions);
         break;
 
+    case 'crear_venta':
+        actionCrearVenta($pdo, $cajero_id);
+        break;
+
+    case 'listar_productos':
+        actionListarProductos($pdo);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Acción no válida.']);
@@ -153,4 +161,138 @@ function actionCambiarEstado(PDO $pdo, int $cajero_id, array $transitions): void
     }
 
     echo json_encode(['success' => true]);
+}
+
+// -------------------------------------------------------
+// POST ?action=crear_venta — Venta rápida (sin QR, sin cliente)
+// Body JSON: { items: [{ producto_id, cantidad }] }
+// -------------------------------------------------------
+function actionCrearVenta(PDO $pdo, int $cajero_id): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input || empty($input['items']) || !is_array($input['items'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El carrito está vacío.']);
+        return;
+    }
+
+    try {
+        $pdo->beginTransaction();
+
+        $total = 0;
+        $detalles = [];
+
+        foreach ($input['items'] as $item) {
+            $producto_id = (int)($item['producto_id'] ?? 0);
+            $cantidad = (int)($item['cantidad'] ?? 0);
+
+            if ($producto_id <= 0 || $cantidad <= 0) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Datos del carrito inválidos.']);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("SELECT id, nombre, precio, stock FROM productos WHERE id = ?");
+            $stmt->execute([$producto_id]);
+            $producto = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$producto) {
+                $pdo->rollBack();
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Producto no encontrado.']);
+                exit;
+            }
+
+            if ($producto['stock'] < $cantidad) {
+                $pdo->rollBack();
+                http_response_code(409);
+                echo json_encode(['success' => false, 'error' => "{$producto['nombre']} sin stock suficiente. Quedan {$producto['stock']} unidades."]);
+                exit;
+            }
+
+            $subtotal = $producto['precio'] * $cantidad;
+            $total += $subtotal;
+            $detalles[] = [
+                'producto_id' => $producto['id'],
+                'nombre' => $producto['nombre'],
+                'cantidad' => $cantidad,
+                'precio_unitario' => $producto['precio']
+            ];
+        }
+
+        // Insertar cabecera: venta rápida, sin cliente, sin QR, estado pendiente
+        $stmtOrden = $pdo->prepare("
+            INSERT INTO ordenes (cliente_id, cajero_id, tipo_pedido, codigo_qr, total, estado, fecha_creacion)
+            VALUES (NULL, ?, 'venta_rapida', NULL, ?, 'pendiente', NOW())
+        ");
+        $stmtOrden->execute([$cajero_id, $total]);
+        $orden_id = (int)$pdo->lastInsertId();
+
+        // Insertar detalles y descontar stock atómicamente
+        $stmtDetalle = $pdo->prepare("INSERT INTO orden_detalles (orden_id, producto_id, cantidad, precio_unitario) VALUES (?, ?, ?, ?)");
+        $stmtStock = $pdo->prepare("UPDATE productos SET stock = stock - ? WHERE id = ? AND stock >= ?");
+
+        foreach ($detalles as $detalle) {
+            $stmtDetalle->execute([$orden_id, $detalle['producto_id'], $detalle['cantidad'], $detalle['precio_unitario']]);
+
+            $stmtStock->execute([$detalle['cantidad'], $detalle['producto_id'], $detalle['cantidad']]);
+            if ($stmtStock->rowCount() === 0) {
+                $pdo->rollBack();
+                http_response_code(409);
+                echo json_encode(['success' => false, 'error' => "{$detalle['nombre']} sin stock suficiente."]);
+                exit;
+            }
+        }
+
+        $pdo->commit();
+
+        echo json_encode(['success' => true, 'orden_id' => $orden_id, 'total' => $total]);
+
+    } catch (RuntimeException $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
+}
+
+// -------------------------------------------------------
+// GET ?action=listar_productos — Catálogo de productos con categoría
+// -------------------------------------------------------
+function actionListarProductos(PDO $pdo): void {
+    $stmt = $pdo->query("
+        SELECT p.id, p.nombre, p.precio, p.stock, p.imagen, c.id AS categoria_id, c.nombre AS categoria_nombre
+        FROM productos p
+        JOIN categorias c ON p.categoria_id = c.id
+        ORDER BY c.nombre, p.nombre
+    ");
+    $productos = $stmt->fetchAll();
+
+    // Lista de categorías únicas en orden de aparición
+    $categorias = [];
+    foreach ($productos as $p) {
+        $found = false;
+        foreach ($categorias as &$cat) {
+            if ($cat['id'] === $p['categoria_id']) {
+                $found = true;
+                break;
+            }
+        }
+        unset($cat);
+        if (!$found) {
+            $categorias[] = ['id' => (int)$p['categoria_id'], 'nombre' => $p['categoria_nombre']];
+        }
+    }
+
+    echo json_encode(['success' => true, 'categorias' => $categorias, 'productos' => $productos]);
 }
