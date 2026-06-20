@@ -33,7 +33,7 @@ $nombre = $_SESSION['usuario_nombre'];
         <button class="cajero-tab active" data-tab="pedidos">
             <i class="fa-solid fa-clipboard-list"></i> Pedidos
         </button>
-        <button class="cajero-tab" data-tab="nueva-venta" disabled>
+        <button class="cajero-tab" data-tab="nueva-venta">
             <i class="fa-solid fa-cart-plus"></i> Nueva Venta
         </button>
         <button class="cajero-tab" data-tab="escanear" disabled>
@@ -100,12 +100,59 @@ $nombre = $_SESSION['usuario_nombre'];
         </div>
     </div>
 
-    <!-- Pane: Nueva Venta (placeholder - PR2) -->
+    <!-- Pane: Nueva Venta -->
     <div class="cajero-pane" id="pane-nueva-venta">
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-cart-plus"></i>
-            <p>Nueva Venta</p>
-            <p style="font-size: 0.85rem;">Próximamente...</p>
+        <div class="venta-layout">
+            <!-- Catálogo -->
+            <div class="venta-catalogo">
+                <div class="venta-header">
+                    <h2><i class="fa-solid fa-cart-plus"></i> Nueva Venta</h2>
+                </div>
+
+                <div class="venta-busqueda">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="venta-busqueda" placeholder="Buscar producto...">
+                    </div>
+                </div>
+
+                <div class="venta-categorias" id="venta-categorias">
+                    <!-- Se llena dinámicamente desde la API -->
+                </div>
+
+                <div class="venta-productos" id="venta-productos">
+                    <div class="empty-state">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <p>Cargando productos...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Carrito -->
+            <div class="venta-carrito">
+                <div class="carrito-header">
+                    <h3><i class="fa-solid fa-receipt"></i> Carrito</h3>
+                    <button class="btn-carrito-vaciar" id="btn-vaciar-venta" title="Vaciar carrito">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+                <div class="carrito-items" id="carrito-items">
+                    <div class="carrito-vacio">
+                        <i class="fa-solid fa-basket-shopping"></i>
+                        <p>Agrega productos al carrito</p>
+                    </div>
+                </div>
+                <div class="carrito-footer">
+                    <div class="carrito-mensaje" id="carrito-mensaje"></div>
+                    <div class="carrito-total">
+                        <span>Total</span>
+                        <span id="carrito-total">$0</span>
+                    </div>
+                    <button class="btn-completar-venta" id="btn-completar-venta" disabled>
+                        <i class="fa-solid fa-cash-register"></i> Completar Venta
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -317,8 +364,262 @@ document.querySelectorAll('.cajero-tab').forEach(tab => {
         this.classList.add('active');
         const paneId = 'pane-' + this.dataset.tab;
         document.getElementById(paneId).classList.add('active');
+
+        // Cargar productos al abrir la pestaña de Nueva Venta
+        if (this.dataset.tab === 'nueva-venta' && !productosCargados) {
+            cargarProductos();
+        }
     });
 });
+
+// ═══════════════════════════════════════════════════════
+// NUEVA VENTA — Catálogo y carrito
+// ═══════════════════════════════════════════════════════
+
+let productosCargados = false;
+let productosData = [];
+let categoriasData = [];
+let carritoVenta = []; // [{producto_id, nombre, precio, cantidad, stock}]
+
+// === Cargar productos desde la API ===
+async function cargarProductos() {
+    const cont = document.getElementById('venta-productos');
+    try {
+        const resp = await fetch('cajero_api.php?action=listar_productos');
+        const data = await resp.json();
+        if (!data.success) {
+            if (resp.status === 401) { window.location.href = 'login.php'; return; }
+            throw new Error(data.error || 'Error al cargar productos.');
+        }
+        productosData = data.productos;
+        categoriasData = data.categorias;
+        renderCategorias();
+        renderProductos('todas');
+        productosCargados = true;
+    } catch (e) {
+        cont.innerHTML = `<div class="empty-state"><i class="fa-solid fa-triangle-exclamation"></i><p>${escapeHtml(e.message)}</p></div>`;
+    }
+}
+
+// === Renderizar tabs de categoría ===
+function renderCategorias() {
+    const cont = document.getElementById('venta-categorias');
+    let html = '<button class="venta-cat-btn active" data-cat="todas">Todas</button>';
+    categoriasData.forEach(cat => {
+        html += `<button class="venta-cat-btn" data-cat="${cat.id}">${escapeHtml(cat.nombre)}</button>`;
+    });
+    cont.innerHTML = html;
+
+    cont.addEventListener('click', e => {
+        if (e.target.tagName !== 'BUTTON') return;
+        cont.querySelectorAll('.venta-cat-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        filtrarProductos();
+    });
+}
+
+// === Renderizar tarjetas de productos ===
+function renderProductos(categoria) {
+    const cont = document.getElementById('venta-productos');
+    const busqueda = document.getElementById('venta-busqueda').value.trim().toLowerCase();
+
+    let filtrados = productosData;
+    if (categoria !== 'todas') {
+        filtrados = filtrados.filter(p => String(p.categoria_id) === String(categoria));
+    }
+    if (busqueda) {
+        filtrados = filtrados.filter(p => p.nombre.toLowerCase().includes(busqueda));
+    }
+
+    if (filtrados.length === 0) {
+        cont.innerHTML = '<div class="empty-state"><i class="fa-solid fa-magnifying-glass"></i><p>Sin resultados</p></div>';
+        return;
+    }
+
+    cont.innerHTML = filtrados.map(p => {
+        const stock = parseInt(p.stock);
+        const agotado = stock === 0;
+        const stockClase = stock > 10 ? 'stock-disponible' : stock > 0 ? 'stock-bajo' : 'stock-agotado';
+        const stockTexto = stock > 10 ? 'Disponible' : stock > 0 ? 'Pocas unidades' : 'Agotado';
+        const tieneImagen = p.imagen && p.imagen !== null;
+        return `
+        <div class="venta-producto-card" data-id="${p.id}">
+            <div class="venta-producto-imagen">
+                ${tieneImagen
+                    ? `<img src="img/${escapeHtml(p.imagen)}" alt="${escapeHtml(p.nombre)}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                       <span class="venta-img-placeholder" style="display:none;"><i class="fa-solid fa-mug-saucer"></i></span>`
+                    : `<span class="venta-img-placeholder"><i class="fa-solid fa-mug-saucer"></i></span>`
+                }
+            </div>
+            <div class="venta-producto-info">
+                <div class="venta-producto-nombre">${escapeHtml(p.nombre)}</div>
+                <div class="venta-producto-precio">$${formatoPrecio(p.precio)}</div>
+                <span class="producto-stock ${stockClase}">${stockTexto}</span>
+                <button class="btn-agregar-venta" data-id="${p.id}" data-nombre="${escapeHtml(p.nombre)}" data-precio="${p.precio}" data-stock="${stock}" ${agotado ? 'disabled' : ''}>
+                    ${agotado ? '<i class="fa-solid fa-ban"></i> Agotado' : '<i class="fa-solid fa-plus"></i> Agregar'}
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// === Filtrar productos por categoría y búsqueda ===
+function filtrarProductos() {
+    const catBtn = document.querySelector('#venta-categorias .venta-cat-btn.active');
+    const cat = catBtn ? catBtn.dataset.cat : 'todas';
+    renderProductos(cat);
+}
+
+// === Carrito de venta rápida ===
+function agregarAlCarrito(id, nombre, precio, stock) {
+    const existente = carritoVenta.find(i => i.producto_id === id);
+    if (existente) {
+        if (existente.cantidad >= stock) return; // no más que el stock
+        existente.cantidad += 1;
+    } else {
+        if (stock === 0) return;
+        carritoVenta.push({ producto_id: id, nombre, precio: parseFloat(precio), cantidad: 1, stock: parseInt(stock) });
+    }
+    renderCarrito();
+}
+
+function quitarDelCarrito(index) {
+    carritoVenta.splice(index, 1);
+    renderCarrito();
+}
+
+function cambiarCantidadCarrito(index, delta) {
+    const item = carritoVenta[index];
+    item.cantidad += delta;
+    if (item.cantidad <= 0) {
+        quitarDelCarrito(index);
+        return;
+    }
+    if (item.cantidad > item.stock) item.cantidad = item.stock;
+    renderCarrito();
+}
+
+function vaciarCarritoVenta() {
+    carritoVenta = [];
+    renderCarrito();
+}
+
+function renderCarrito() {
+    const cont = document.getElementById('carrito-items');
+    const totalEl = document.getElementById('carrito-total');
+    const btnVenta = document.getElementById('btn-completar-venta');
+    const msj = document.getElementById('carrito-mensaje');
+
+    // Limpiar mensajes previos
+    msj.className = 'carrito-mensaje';
+    msj.textContent = '';
+
+    let total = 0;
+
+    if (carritoVenta.length === 0) {
+        cont.innerHTML = '<div class="carrito-vacio"><i class="fa-solid fa-basket-shopping"></i><p>Agrega productos al carrito</p></div>';
+        btnVenta.disabled = true;
+    } else {
+        btnVenta.disabled = false;
+        cont.innerHTML = carritoVenta.map((item, idx) => {
+            const subtotal = item.precio * item.cantidad;
+            total += subtotal;
+            return `
+            <div class="carrito-item">
+                <div class="carrito-item-top">
+                    <span class="carrito-item-nombre">${escapeHtml(item.nombre)}</span>
+                    <span class="carrito-item-precio">$${formatoPrecio(item.precio)}</span>
+                </div>
+                <div class="carrito-item-controls">
+                    <button class="qty-btn" onclick="cambiarCantidadCarrito(${idx}, -1)">&minus;</button>
+                    <span class="carrito-item-qty">${item.cantidad}</span>
+                    <button class="qty-btn" onclick="cambiarCantidadCarrito(${idx}, 1)">+</button>
+                    <span class="carrito-item-subtotal">$${formatoPrecio(subtotal)}</span>
+                    <button class="carrito-item-remove" onclick="quitarDelCarrito(${idx})" title="Quitar"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    totalEl.textContent = '$' + formatoPrecio(total);
+}
+
+// === Completar venta ===
+async function completarVenta() {
+    const msj = document.getElementById('carrito-mensaje');
+    const btn = document.getElementById('btn-completar-venta');
+
+    if (carritoVenta.length === 0) {
+        msj.className = 'carrito-mensaje error';
+        msj.textContent = 'El carrito está vacío.';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
+    msj.className = 'carrito-mensaje';
+    msj.textContent = '';
+
+    try {
+        const items = carritoVenta.map(i => ({
+            producto_id: i.producto_id,
+            cantidad: i.cantidad
+        }));
+
+        const resp = await fetch('cajero_api.php?action=crear_venta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items })
+        });
+
+        const data = await resp.json();
+
+        if (data.success) {
+            msj.className = 'carrito-mensaje exito';
+            msj.textContent = `¡Venta #${data.orden_id} creada! Total: $${formatoPrecio(data.total)}`;
+            carritoVenta = [];
+            renderCarrito();
+            // Actualizar pedidos en la pestaña de Pedidos
+            cargarPedidos();
+        } else {
+            if (resp.status === 401) {
+                window.location.href = 'login.php';
+                return;
+            }
+            msj.className = 'carrito-mensaje error';
+            msj.textContent = data.error || 'Error al crear la venta.';
+        }
+    } catch (e) {
+        msj.className = 'carrito-mensaje error';
+        msj.textContent = 'Error de conexión. Intenta de nuevo.';
+    } finally {
+        btn.disabled = carritoVenta.length === 0;
+        btn.innerHTML = '<i class="fa-solid fa-cash-register"></i> Completar Venta';
+    }
+}
+
+// === Búsqueda con debounce ===
+let ventaDebounceTimer;
+document.getElementById('venta-busqueda').addEventListener('input', () => {
+    clearTimeout(ventaDebounceTimer);
+    ventaDebounceTimer = setTimeout(filtrarProductos, 300);
+});
+
+// === Delegación de eventos: agregar al carrito ===
+document.getElementById('venta-productos').addEventListener('click', e => {
+    const btn = e.target.closest('.btn-agregar-venta');
+    if (!btn || btn.disabled) return;
+    agregarAlCarrito(
+        parseInt(btn.dataset.id, 10),
+        btn.dataset.nombre,
+        parseFloat(btn.dataset.precio),
+        parseInt(btn.dataset.stock, 10)
+    );
+});
+
+// === Botones del carrito ===
+document.getElementById('btn-vaciar-venta').addEventListener('click', vaciarCarritoVenta);
+document.getElementById('btn-completar-venta').addEventListener('click', completarVenta);
 </script>
 
 </body>
