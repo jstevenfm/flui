@@ -806,6 +806,316 @@ body {
     padding-right: 32px;
 }
 
+/* ========== Reportes — selector de fechas ========== */
+.date-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-end;
+    margin-bottom: 22px;
+    padding: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.preset-group {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.btn-preset {
+    background: var(--bg-input);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-preset:hover {
+    color: var(--text-white);
+    border-color: var(--accent);
+}
+
+.btn-preset.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+}
+
+.custom-range {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.form-group-inline {
+    margin-bottom: 0;
+    min-width: 140px;
+}
+
+.form-group-inline label {
+    margin-bottom: 4px;
+}
+
+.form-group-inline input {
+    padding: 8px 10px;
+    font-size: 0.85rem;
+}
+
+/* color de fondo para input date (el calendario nativo) */
+.form-group input[type="date"] {
+    color-scheme: dark;
+}
+
+/* ========== Reportes — secciones ========== */
+.reporte-section {
+    padding: 18px 0 6px;
+    border-bottom: 1px solid var(--border);
+}
+
+.reporte-section:last-child {
+    border-bottom: none;
+}
+
+.reporte-subtitle {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-white);
+}
+
+.reporte-subtitle i {
+    color: var(--accent);
+}
+
+.report-table {
+    /* mismo estilo que .admin-table; clase alias para semántica */
+    width: 100%;
+}
+
+.reporte-hint {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 24px 10px;
+    font-size: 0.85rem;
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.reporte-vacio {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 28px 10px;
+    font-size: 0.85rem;
+}
+
+.reporte-vacio i {
+    font-size: 1.6rem;
+    opacity: 0.4;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.reporte-vacio.reporte-error i {
+    color: var(--danger);
+    opacity: 0.7;
+}
+
+/* Fila de totales del reporte de ventas */
+.admin-table .reporte-totales td {
+    border-top: 2px solid var(--border);
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* ========== Escáner QR ========== */
+.scanner-help {
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+}
+
+.scanner-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.scanner-controls button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Contenedor de la cámara — dimensiones fijas con fallback */
+.qr-reader {
+    width: 100%;
+    max-width: 320px;
+    min-height: 240px;
+    aspect-ratio: 1 / 1;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+    margin-bottom: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* html5-qrcode inyecta un <video>; lo encajamos al contenedor */
+.qr-reader video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    border-radius: var(--radius);
+}
+
+/* Estado del escáner */
+.scanner-status {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    margin-bottom: 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+}
+
+.scanner-status-ok {
+    background: rgba(40, 167, 69, 0.12);
+    border-color: rgba(40, 167, 69, 0.3);
+    color: var(--success);
+}
+
+.scanner-status-error {
+    background: rgba(231, 76, 60, 0.12);
+    border-color: rgba(231, 76, 60, 0.3);
+    color: var(--danger);
+}
+
+.scanner-status-info {
+    color: var(--info);
+}
+
+/* Input manual */
+.manual-input-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.manual-input-row input {
+    flex: 1;
+    min-width: 180px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text-white);
+    font-size: 0.9rem;
+    font-family: 'Inter', monospace;
+    letter-spacing: 1px;
+}
+
+.manual-input-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* ========== Panel de verificación ========== */
+.verification-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 8px;
+}
+
+.verification-panel.hidden {
+    display: none;
+}
+
+.verification-subtitle {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-white);
+}
+
+.verification-subtitle i {
+    color: var(--accent);
+}
+
+.verificacion-grid {
+    margin-bottom: 16px;
+}
+
+.ver-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ver-label {
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 0.82rem;
+}
+
+.ver-value {
+    color: var(--text-white);
+    font-weight: 600;
+    text-align: right;
+    max-width: 65%;
+    word-break: break-word;
+}
+
+.ver-total {
+    color: var(--accent);
+    font-size: 1.05rem;
+}
+
+.ver-items-label {
+    margin-top: 14px;
+    margin-bottom: 8px;
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.verification-actions {
+    margin-top: 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.verification-actions button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 /* ========== Responsive ========== */
 @media (min-width: 640px) {
     .admin-header {
@@ -831,6 +1141,37 @@ body {
 
     .stats-grid {
         grid-template-columns: 1fr;
+    }
+
+    /* Date picker se apila en móvil */
+    .date-picker {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .custom-range {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .form-group-inline {
+        min-width: 0;
+    }
+
+    .custom-range .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* El panel de verificación ocupa todo el ancho */
+    .verification-panel {
+        border-left: none;
+        border-top: 4px solid var(--accent);
+    }
+
+    .ver-value {
+        max-width: 100%;
+        text-align: left;
     }
 
     /* Tables become card layout on mobile */
