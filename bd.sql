@@ -1,3 +1,12 @@
+-- 0. Tabla de Usuarios (base de la autenticación y los roles)
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    rol ENUM('cliente', 'admin') NOT NULL DEFAULT 'cliente'
+);
+
 -- 1. Tabla de Productos (para que el buscador de JS tenga qué mostrar)
 CREATE TABLE productos (
     id INT AUTO_INCREMENT PRIMARY KEY,

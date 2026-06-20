@@ -6,7 +6,7 @@ $mensaje = '';
 
 if (isset($_SESSION['usuario_id']) && isset($_SESSION['usuario_rol'])) {
     if ($_SESSION['usuario_rol'] === 'admin') {
-        header("Location: admin_dashboard.php"); 
+        header("Location: adm.php"); 
     } else {
         header("Location: password.php"); 
     }
@@ -31,7 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             
             if ($_SESSION['usuario_rol'] === 'admin') {
-                header("Location: admin_dashboard.php"); 
+                header("Location: adm.php"); 
             } else {
                 header("Location: password.php"); 
             }
@@ -90,7 +90,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                 <button type="submit" class="btn">Ingresar &rarr;</button>
             </form>
-            <a class="singup" href="singup.php">Registrarse</a>
+            <a class="singup" href="signup.php">Registrarse</a>
         </section>
     </div>
 

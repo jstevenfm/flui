@@ -78,7 +78,7 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST') {
 
             <?php echo $mensaje; ?>
 
-            <form class="form-content" id="signup-form" method="post" action="singup.php">
+            <form class="form-content" id="signup-form" method="post" action="signup.php">
                 <div class="input-group">
                     <label>Nombre</label>
                     <input name="name" id="name" type="text" placeholder="Ej: Pepito Perez" required value="<?php echo isset($_POST['name']) ? htmlspecialchars($_POST['name']) : ''; ?>">

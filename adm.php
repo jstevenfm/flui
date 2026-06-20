@@ -1,3 +1,13 @@
+<?php
+// adm.php — guardia de sesión: solo admin
+session_start();
+require 'conexion.php';
+
+if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_rol'] !== 'admin') {
+    header("Location: login.php");
+    exit;
+}
+?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -28,6 +38,7 @@
             </nav>
             <div class="sidebar-footer">
                 <a href="#"><i class="fa-solid fa-gear"></i> Settings</a>
+                <a href="logout.php"><i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión</a>
                 <div class="user-profile">
                     <img src="https://via.placeholder.com/35" alt="User">
                     <div>
