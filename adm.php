@@ -101,9 +101,77 @@ $nombre = $_SESSION['usuario_nombre'];
             <span id="cajeros-error-text"></span>
             <button onclick="cargarCajeros()" class="btn-reintento"><i class="fa-solid fa-arrows-rotate"></i> Reintentar</button>
         </div>
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-users"></i>
-            <p>Gestión de cajeros — próximamente</p>
+
+        <div class="pane-head">
+            <h2 class="section-title"><i class="fa-solid fa-users"></i> Gestionar Cajeros</h2>
+            <button class="btn-primary" onclick="abrirModalCrearCajero()">
+                <i class="fa-solid fa-user-plus"></i> Nuevo Cajero
+            </button>
+        </div>
+
+        <div class="table-responsive" id="cajeros-container">
+            <div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear cajero -->
+    <div class="modal-overlay" id="modal-crear-cajero">
+        <div class="modal-content">
+            <button class="modal-close" onclick="cerrarModal('modal-crear-cajero')">&times;</button>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-plus"></i> Nuevo Cajero</h3>
+            </div>
+            <div class="modal-body">
+                <form id="form-crear-cajero" onsubmit="guardarCajero(event)">
+                    <div class="form-group">
+                        <label for="cajero-nuevo-usuario">Usuario</label>
+                        <input type="text" id="cajero-nuevo-usuario" name="usuario" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="cajero-nuevo-email">Correo electrónico</label>
+                        <input type="email" id="cajero-nuevo-email" name="email" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="cajero-nuevo-password">Contraseña (mínimo 6 caracteres)</label>
+                        <input type="password" id="cajero-nuevo-password" name="password" required minlength="6" autocomplete="new-password">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModal('modal-crear-cajero')">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Crear</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar cajero -->
+    <div class="modal-overlay" id="modal-editar-cajero">
+        <div class="modal-content">
+            <button class="modal-close" onclick="cerrarModal('modal-editar-cajero')">&times;</button>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-user-pen"></i> Editar Cajero</h3>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-cajero" onsubmit="actualizarCajero(event)">
+                    <input type="hidden" id="cajero-editar-id" name="id">
+                    <div class="form-group">
+                        <label for="cajero-editar-usuario">Usuario</label>
+                        <input type="text" id="cajero-editar-usuario" name="usuario" required autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="cajero-editar-email">Correo electrónico</label>
+                        <input type="email" id="cajero-editar-email" name="email" required autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="cajero-editar-password">Nueva contraseña</label>
+                        <input type="password" id="cajero-editar-password" name="password" placeholder="Dejar vacío para mantener la actual" autocomplete="new-password">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModal('modal-editar-cajero')">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -320,10 +388,265 @@ async function cargarDashboard() {
     }
 }
 
-// === Cajeros: placeholder (implements in Slice 2) ===
-function cargarCajeros() {
-    // Will be implemented in Slice 2
+// =========================================================
+// Cajeros CRUD (Slice 2)
+// =========================================================
+
+// Cache en memoria de los cajeros cargados (para botones de acción)
+let cajerosCache = [];
+
+// --- Cargar lista de cajeros ---
+async function cargarCajeros() {
+    const container = document.getElementById('cajeros-container');
+    const errorBox = document.getElementById('cajeros-error');
+    const errorText = document.getElementById('cajeros-error-text');
+    errorBox.classList.add('hidden');
+    container.innerHTML = '<div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+
+    try {
+        const resp = await fetch('admin_api.php?action=listar_cajeros');
+        const data = await resp.json();
+
+        if (!data.success) {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = 'login.php';
+                return;
+            }
+            throw new Error(data.error || data.message || 'Error al cargar cajeros.');
+        }
+
+        cajerosCache = data.cajeros || [];
+        renderTablaCajeros(cajerosCache);
+    } catch (e) {
+        errorText.textContent = e.message || 'Error de conexión.';
+        errorBox.classList.remove('hidden');
+        container.innerHTML = '';
+    }
 }
+
+// --- Renderizar tabla de cajeros ---
+function renderTablaCajeros(cajeros) {
+    const container = document.getElementById('cajeros-container');
+
+    if (!cajeros || cajeros.length === 0) {
+        container.innerHTML =
+            '<table class="admin-table"><thead><tr>'
+            + '<th>ID</th><th>Usuario</th><th>Email</th><th>Estado</th><th>Acciones</th>'
+            + '</tr></thead><tbody>'
+            + '<tr><td colspan="5" class="empty-state"><i class="fa-solid fa-user-slash"></i><p>No hay cajeros registrados.</p></td></tr>'
+            + '</tbody></table>';
+        return;
+    }
+
+    let html = '<table class="admin-table"><thead><tr>'
+        + '<th>ID</th><th>Usuario</th><th>Email</th><th>Estado</th><th>Acciones</th>'
+        + '</tr></thead><tbody>';
+
+    cajeros.forEach(c => {
+        // activo puede venir como 0/1 (MySQL BOOLEAN) o true/false — normalizar a bool
+        const activo = c.activo == 1 || c.activo === true;
+        const badge = activo
+            ? '<span class="badge-activo">Activo</span>'
+            : '<span class="badge-inactivo">Inactivo</span>';
+        const toggleLabel = activo ? 'Desactivar' : 'Activar';
+        const toggleIcon = activo ? 'fa-circle-minus' : 'fa-circle-check';
+        const toggleClass = activo ? 'btn-danger' : 'btn-primary';
+
+        html += '<tr>'
+            + '<td data-label="ID">#' + c.id + '</td>'
+            + '<td data-label="Usuario">' + escapeHtml(c.usuario) + '</td>'
+            + '<td data-label="Email">' + escapeHtml(c.email) + '</td>'
+            + '<td data-label="Estado">' + badge + '</td>'
+            + '<td data-label="Acciones" class="acciones-cell">'
+            +   '<button class="btn-icon ' + toggleClass + '" onclick="toggleCajero(' + c.id + ', ' + (activo ? '0' : '1') + ')">'
+            +     '<i class="fa-solid ' + toggleIcon + '"></i> ' + toggleLabel
+            +   '</button>'
+            +   '<button class="btn-icon btn-secondary" onclick="abrirModalEditarCajero(' + c.id + ')">'
+            +     '<i class="fa-solid fa-user-pen"></i> Editar'
+            +   '</button>'
+            + '</td>'
+            + '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Abrir modal crear cajero ---
+function abrirModalCrearCajero() {
+    document.getElementById('form-crear-cajero').reset();
+    abrirModal('modal-crear-cajero');
+}
+
+// --- Guardar (crear) cajero ---
+async function guardarCajero(event) {
+    event.preventDefault();
+    const usuario = document.getElementById('cajero-nuevo-usuario').value.trim();
+    const email = document.getElementById('cajero-nuevo-email').value.trim();
+    const password = document.getElementById('cajero-nuevo-password').value;
+
+    if (password.length < 6) {
+        mostrarToast('error', 'La contraseña debe tener al menos 6 caracteres.');
+        return;
+    }
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=crear_cajero', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usuario, email, password })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo crear el cajero.');
+            return;
+        }
+
+        mostrarToast('exito', 'Cajero creado exitosamente.');
+        cerrarModal('modal-crear-cajero');
+        cargarCajeros();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Abrir modal editar cajero ---
+function abrirModalEditarCajero(id) {
+    const cajero = cajerosCache.find(c => c.id == id);
+    if (!cajero) {
+        mostrarToast('error', 'Cajero no encontrado.');
+        return;
+    }
+    document.getElementById('cajero-editar-id').value = cajero.id;
+    document.getElementById('cajero-editar-usuario').value = cajero.usuario || '';
+    document.getElementById('cajero-editar-email').value = cajero.email || '';
+    document.getElementById('cajero-editar-password').value = '';
+    abrirModal('modal-editar-cajero');
+}
+
+// --- Actualizar (editar) cajero ---
+async function actualizarCajero(event) {
+    event.preventDefault();
+    const id = document.getElementById('cajero-editar-id').value;
+    const usuario = document.getElementById('cajero-editar-usuario').value.trim();
+    const email = document.getElementById('cajero-editar-email').value.trim();
+    const password = document.getElementById('cajero-editar-password').value;
+
+    if (password !== '' && password.length < 6) {
+        mostrarToast('error', 'La contraseña debe tener al menos 6 caracteres.');
+        return;
+    }
+
+    // Construimos el body: password solo se envía si el usuario escribió algo
+    const body = { id: parseInt(id, 10), usuario, email };
+    if (password !== '') body.password = password;
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=editar_cajero', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo actualizar el cajero.');
+            return;
+        }
+
+        mostrarToast('exito', 'Cajero actualizado exitosamente.');
+        cerrarModal('modal-editar-cajero');
+        cargarCajeros();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Activar/desactivar cajero ---
+async function toggleCajero(id, nuevoActivo) {
+    const accion = nuevoActivo == 1 ? 'activar' : 'desactivar';
+    if (!confirm('¿Confirmas que deseas ' + accion + ' este cajero?')) return;
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=toggle_cajero', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: parseInt(id, 10), activo: nuevoActivo == 1 })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo actualizar el estado.');
+            return;
+        }
+
+        mostrarToast('exito', 'Estado actualizado.');
+        cargarCajeros();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// =========================================================
+// Utilidades de API y modales (reutilizables — Slice 3+)
+// =========================================================
+
+// fetch wrapper central: aquí se podría añadir credenciales/headers comunes.
+async function apiFetch(url, options) {
+    return fetch(url, options);
+}
+
+// Abrir cualquier modal por id
+function abrirModal(modalId) {
+    document.getElementById(modalId).classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+// Cerrar modal por id
+function cerrarModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+    // Solo restaurar scroll si no quedan otros modales abiertos
+    const quedanAbiertos = document.querySelectorAll('.modal-overlay.active').length > 0;
+    if (!quedanAbiertos) document.body.style.overflow = '';
+}
+
+// Cerrar modal con tecla Escape
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const abiertos = document.querySelectorAll('.modal-overlay.active');
+        if (abiertos.length > 0) {
+            // Cierra el último abierto (top-most)
+            abiertos[abiertos.length - 1].classList.remove('active');
+            const quedanAbiertos = document.querySelectorAll('.modal-overlay.active').length > 0;
+            if (!quedanAbiertos) document.body.style.overflow = '';
+        }
+    }
+});
+
+// Cerrar modal al hacer clic en el overlay (fuera del contenido)
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('modal-overlay')) {
+        e.target.classList.remove('active');
+        const quedanAbiertos = document.querySelectorAll('.modal-overlay.active').length > 0;
+        if (!quedanAbiertos) document.body.style.overflow = '';
+    }
+});
 </script>
 
 </body>
