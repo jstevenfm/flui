@@ -159,6 +159,9 @@ $nombre = $_SESSION['usuario_nombre'];
     <div id="toast-container"></div>
 
 <script>
+// Debug: admin session
+console.log('Admin:', <?php echo json_encode($nombre); ?>);
+
 // === Utilidades ===
 function escapeHtml(s) {
     const d = document.createElement('div');
