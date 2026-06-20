@@ -1,12 +1,50 @@
 <?php
-// adm.php — guardia de sesión: solo admin
-session_start();
+// adm.php — Panel de administración (solo admin)
+require_once 'auth.php';
+checkRole('admin');
 require 'conexion.php';
 
-if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_rol'] !== 'admin') {
-    header("Location: login.php");
-    exit;
+$mensaje_cajero = '';
+
+// Procesar formularios de gestión de cajeros
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $accion = $_POST['accion'] ?? '';
+
+    if ($accion === 'crear') {
+        $usuario_cajero = trim($_POST['usuario'] ?? '');
+        $email_cajero = strtolower(trim($_POST['email'] ?? ''));
+        $password_cajero = $_POST['password'] ?? '';
+
+        if (empty($usuario_cajero) || empty($email_cajero) || empty($password_cajero)) {
+            $mensaje_cajero = "<div class='alert alert-danger'>Por favor, rellena todos los campos.</div>";
+        } elseif (strlen($password_cajero) < 6) {
+            $mensaje_cajero = "<div class='alert alert-danger'>La contraseña debe tener al menos 6 caracteres.</div>";
+        } else {
+            $password_hash = password_hash($password_cajero, PASSWORD_BCRYPT);
+            try {
+                $stmt = $pdo->prepare("INSERT INTO usuarios (usuario, email, password, rol) VALUES (?, ?, ?, 'cajero')");
+                $stmt->execute([$usuario_cajero, $email_cajero, $password_hash]);
+                $mensaje_cajero = "<div class='alert alert-success'>Cajero creado exitosamente.</div>";
+            } catch (\PDOException $e) {
+                if ($e->getCode() == 23000) {
+                    $mensaje_cajero = "<div class='alert alert-danger'>El correo electrónico ya está registrado.</div>";
+                } else {
+                    $mensaje_cajero = "<div class='alert alert-danger'>Error al crear el cajero. Intente más tarde.</div>";
+                }
+            }
+        }
+    } elseif ($accion === 'desactivar') {
+        $id_cajero = (int)($_POST['id_cajero'] ?? 0);
+        if ($id_cajero > 0) {
+            $stmt = $pdo->prepare("UPDATE usuarios SET activo = 0 WHERE id = ? AND rol = 'cajero'");
+            $stmt->execute([$id_cajero]);
+            $mensaje_cajero = "<div class='alert alert-success'>Cajero desactivado exitosamente.</div>";
+        }
+    }
 }
+
+// Obtener lista de cajeros
+$cajeros = $pdo->query("SELECT id, usuario, email, activo FROM usuarios WHERE rol = 'cajero' ORDER BY id DESC")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -16,6 +54,22 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_rol'] !== 'admin') {
     <title>Flui POS - Dashboard</title>
     <link rel="stylesheet" href="adm.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .alert { padding: 10px 15px; margin-bottom: 15px; border-radius: 8px; font-size: 14px; }
+        .alert-danger { background: #f8d7da; color: #721c24; }
+        .alert-success { background: #d4edda; color: #155724; }
+        .cajero-section { background: var(--bg-card); border-radius: 20px; padding: 20px; margin-bottom: 30px; border: 1px solid var(--border); }
+        .cajero-section h3 { margin-bottom: 15px; }
+        .cajero-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: flex-end; }
+        .cajero-form .field { display: flex; flex-direction: column; gap: 5px; }
+        .cajero-form .field label { color: var(--text-dim); font-size: 0.8rem; }
+        .cajero-form .field input { background: var(--bg-dark); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-size: 0.9rem; width: 200px; }
+        .btn-crear { background: var(--accent); color: black; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .btn-desactivar { background: #e74c3c; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
+        .btn-desactivar:hover { background: #c0392b; }
+        .estado-activo { color: var(--accent); font-size: 0.85rem; }
+        .estado-inactivo { color: #e74c3c; font-size: 0.85rem; }
+    </style>
 </head>
 <body>
 
@@ -32,7 +86,7 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_rol'] !== 'admin') {
                 <a href="#" class="active"><i class="fa-solid fa-table-cells-large"></i> Dashboard</a>
                 <a href="#"><i class="fa-solid fa-receipt"></i> Transactions</a>
                 <a href="#"><i class="fa-solid fa-cart-shopping"></i> Orders</a>
-                <a href="#"><i class="fa-solid fa-users"></i> Staff</a>
+                <a href="#cajeros"><i class="fa-solid fa-users"></i> Cajeros</a>
                 <a href="#"><i class="fa-solid fa-box"></i> Inventory</a>
                 <a href="#"><i class="fa-solid fa-chart-line"></i> Reports</a>
             </nav>
@@ -70,6 +124,72 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_rol'] !== 'admin') {
                     <div class="action-buttons">
                         <button class="btn-secondary">Export CSV</button>
                         <button class="btn-primary">New Order</button>
+                    </div>
+                </div>
+
+                <!-- Sección: Gestionar Cajeros -->
+                <div class="cajero-section" id="cajeros">
+                    <h3><i class="fa-solid fa-users" style="color: var(--accent);"></i> Gestionar Cajeros</h3>
+                    <?php echo $mensaje_cajero; ?>
+                    <form method="POST" class="cajero-form">
+                        <input type="hidden" name="accion" value="crear">
+                        <div class="field">
+                            <label>Nombre de usuario</label>
+                            <input type="text" name="usuario" placeholder="Ej: cajero1" required>
+                        </div>
+                        <div class="field">
+                            <label>Correo electrónico</label>
+                            <input type="email" name="email" placeholder="cajero@flui.com" required>
+                        </div>
+                        <div class="field">
+                            <label>Contraseña</label>
+                            <input type="password" name="password" placeholder="Mínimo 6 caracteres" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn-crear"><i class="fa-solid fa-plus"></i> Crear Cajero</button>
+                    </form>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>USUARIO</th>
+                                    <th>CORREO</th>
+                                    <th>ESTADO</th>
+                                    <th>ACCIÓN</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($cajeros)): ?>
+                                <tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No hay cajeros registrados.</td></tr>
+                                <?php else: ?>
+                                <?php foreach ($cajeros as $c): ?>
+                                <tr>
+                                    <td>#<?php echo $c['id']; ?></td>
+                                    <td><?php echo htmlspecialchars($c['usuario']); ?></td>
+                                    <td><?php echo htmlspecialchars($c['email']); ?></td>
+                                    <td>
+                                        <?php if ($c['activo']): ?>
+                                        <span class="estado-activo">Activo</span>
+                                        <?php else: ?>
+                                        <span class="estado-inactivo">Inactivo</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($c['activo']): ?>
+                                        <form method="POST" style="display:inline;" onsubmit="return confirm('¿Desactivar este cajero?');">
+                                            <input type="hidden" name="accion" value="desactivar">
+                                            <input type="hidden" name="id_cajero" value="<?php echo $c['id']; ?>">
+                                            <button type="submit" class="btn-desactivar">Desactivar</button>
+                                        </form>
+                                        <?php else: ?>
+                                        <span style="color:var(--text-dim);font-size:0.8rem;">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 

@@ -8,39 +8,27 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST') {
     $email_confirm = strtolower(trim($_POST["repeat-email"] ?? ''));
     $password = $_POST["password"] ?? '';
     $password_confirm = $_POST["repeat-password"] ?? '';
-   
-    $rol = trim($_POST["role"] ?? '');
-
-  
-    $roles_permitidos = ['cliente', 'admin'];
 
     // Validaciones del Backend
-    if (empty($nombre) || empty($email) || empty($password) || empty($rol)) {
-        
-        $mensaje = "<div class='alert alert-danger'>Por favor, rellena todos los campos, incluido el tipo de usuario.</div>";
-    } elseif (!in_array($rol, $roles_permitidos)) {
-        
-        $mensaje = "<div class='alert alert-danger'>El tipo de usuario seleccionado no es válido.</div>";
+    if (empty($nombre) || empty($email) || empty($password)) {
+        $mensaje = "<div class='alert alert-danger'>Por favor, rellena todos los campos.</div>";
     } elseif ($email !== $email_confirm) {
         $mensaje = "<div class='alert alert-danger'>Los correos electrónicos no coinciden.</div>";
     } elseif ($password !== $password_confirm) {
         $mensaje = "<div class='alert alert-danger'>Las contraseñas no coinciden.</div>";
     } else {
-       
         $password_encriptada = password_hash($password, PASSWORD_BCRYPT);
 
         try {
-           
-            $stmt = $pdo->prepare("INSERT INTO usuarios (usuario, email, password, rol) VALUES (?, ?, ?, ?)");
-           
-            $stmt->execute([$nombre, $email, $password_encriptada, $rol]);
+            $stmt = $pdo->prepare("INSERT INTO usuarios (usuario, email, password, rol) VALUES (?, ?, ?, 'cliente')");
+            $stmt->execute([$nombre, $email, $password_encriptada]);
             
             $mensaje = "<div class='alert alert-success'>¡Registro exitoso! <a href='login.php' class='link-green' style='text-decoration: underline;'>Inicia sesión aquí</a></div>";
         } catch (\PDOException $e) {
             if ($e->getCode() == 23000) { 
-                $mensaje = "<div class='alert alert-danger'>El correo electrónico o usuario ya está registrado.</div>";
+                $mensaje = "<div class='alert alert-danger'>El correo electrónico ya está registrado.</div>";
             } else {
-                $mensaje = "<div class='alert alert-danger'>Error al registrar el usuario: " . $e->getMessage() . "</div>";
+                $mensaje = "<div class='alert alert-danger'>Error al registrar el usuario. Por favor, intente más tarde.</div>";
             }
         }
     }
@@ -101,16 +89,6 @@ if ($_SERVER["REQUEST_METHOD"] == 'POST') {
                     <input name="repeat-password" id="repeat-password" type="password" placeholder="Contraseña" required>
                 </div>
                 
-                <div class="input-group">
-    <label>El tipo de usuario:</label>
-    <select name="role" id="role" required>
-        <option value="" disabled selected hidden>Selecciona un tipo de usuario</option>
-        
-        <option value="cliente" <?php echo (isset($_POST['role']) && $_POST['role'] === 'cliente') ? 'selected' : ''; ?>>Cliente</option>
-        <option value="admin" <?php echo (isset($_POST['role']) && $_POST['role'] === 'admin') ? 'selected' : ''; ?>>Administrador de tienda</option>
-    </select>
-</div>
-
                 <button type="submit" class="btn">Registrarse &rarr;</button>
             </form>
             <a class="singup" href="login.php" style="display: block; text-align: center; margin-top: 15px;">¿Ya tienes cuenta? Ingresa</a>

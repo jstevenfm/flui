@@ -1,12 +1,7 @@
 <?php
-session_start();
+require_once 'auth.php';
+checkRole(['admin', 'cajero', 'cliente']);
 require 'conexion.php';
-
-
-if (!isset($_SESSION['usuario_id'])) {
-    header("Location: login.php");
-    exit;
-}
 
 $mensaje = '';
 

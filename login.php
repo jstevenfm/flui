@@ -3,12 +3,31 @@ session_start();
 require 'conexion.php';
 $mensaje = '';
 
+// Consumir mensaje flash de error de auth.php
+if (isset($_SESSION['mensaje_error'])) {
+    $mensaje = "<div class='alert alert-danger'>" . htmlspecialchars($_SESSION['mensaje_error']) . "</div>";
+    unset($_SESSION['mensaje_error']);
+}
 
+// Redirigir usuario ya autenticado según su rol
 if (isset($_SESSION['usuario_id']) && isset($_SESSION['usuario_rol'])) {
-    if ($_SESSION['usuario_rol'] === 'admin') {
-        header("Location: adm.php"); 
-    } else {
-        header("Location: password.php"); 
+    switch ($_SESSION['usuario_rol']) {
+        case 'admin':
+            header('Location: adm.php');
+            break;
+        case 'cajero':
+            header('Location: cajero.php');
+            break;
+        case 'cliente':
+            header('Location: cliente.php');
+            break;
+        default:
+            $_SESSION = [];
+            session_destroy();
+            session_start();
+            $_SESSION['mensaje_error'] = 'Rol no válido. Contacta al administrador.';
+            header('Location: login.php');
+            exit;
     }
     exit;
 }
@@ -18,7 +37,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $password = $_POST["password"] ?? '';
 
     if (!empty($email) && !empty($password)) {
-        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ?");
+        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE email = ? AND activo = TRUE");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
 
@@ -27,13 +46,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             $_SESSION['usuario_id'] = $user['id'];
             $_SESSION['usuario_nombre'] = $user['usuario'];
-            $_SESSION['usuario_rol'] = $user['rol']; 
+            $_SESSION['usuario_rol'] = $user['rol'];
 
-            
-            if ($_SESSION['usuario_rol'] === 'admin') {
-                header("Location: adm.php"); 
-            } else {
-                header("Location: password.php"); 
+            switch ($_SESSION['usuario_rol']) {
+                case 'admin':
+                    header('Location: adm.php');
+                    break;
+                case 'cajero':
+                    header('Location: cajero.php');
+                    break;
+                case 'cliente':
+                    header('Location: cliente.php');
+                    break;
+                default:
+                    $_SESSION = [];
+                    session_destroy();
+                    session_start();
+                    $_SESSION['mensaje_error'] = 'Rol no válido. Contacta al administrador.';
+                    header('Location: login.php');
+                    exit;
             }
             exit;
         } else {

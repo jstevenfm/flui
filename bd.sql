@@ -4,7 +4,8 @@ CREATE TABLE usuarios (
     usuario VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    rol ENUM('cliente', 'cajero', 'admin') NOT NULL DEFAULT 'cliente'
+    rol ENUM('cliente', 'cajero', 'admin') NOT NULL DEFAULT 'cliente',
+    activo BOOLEAN DEFAULT TRUE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 1. Categorías de productos
