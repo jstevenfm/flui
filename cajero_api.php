@@ -1,7 +1,6 @@
 <?php
 // cajero_api.php — JSON API para la vista del cajero
-// Acciones PR1: listar, cambiar_estado
-// Acciones futuras (PR2/PR3): crear_venta, buscar_qr, reclamar
+// Acciones: listar, cambiar_estado, crear_venta, listar_productos, buscar_qr, reclamar
 
 header('Content-Type: application/json');
 
@@ -12,9 +11,15 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/conexion.php';
 
 // --- Autenticación: solo cajero ---
-if (!isset($_SESSION['usuario_id']) || $_SESSION['usuario_rol'] !== 'cajero') {
+// 401 = sin sesión; 403 = sesión válida pero rol equivocado
+if (!isset($_SESSION['usuario_id'])) {
     http_response_code(401);
-    echo json_encode(['success' => false, 'error' => 'auth']);
+    echo json_encode(['success' => false, 'error' => 'auth', 'message' => 'Debes iniciar sesión.']);
+    exit;
+}
+if (($_SESSION['usuario_rol'] ?? '') !== 'cajero') {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'forbidden', 'message' => 'Acceso restringido al rol cajero.']);
     exit;
 }
 
@@ -44,6 +49,14 @@ switch ($action) {
 
     case 'listar_productos':
         actionListarProductos($pdo);
+        break;
+
+    case 'buscar_qr':
+        actionBuscarQR($pdo);
+        break;
+
+    case 'reclamar':
+        actionReclamar($pdo, $cajero_id);
         break;
 
     default:
@@ -295,4 +308,146 @@ function actionListarProductos(PDO $pdo): void {
     }
 
     echo json_encode(['success' => true, 'categorias' => $categorias, 'productos' => $productos]);
+}
+
+// -------------------------------------------------------
+// POST ?action=buscar_qr — Buscar orden por código QR
+// Body JSON: { codigo_qr }
+// Devuelve los detalles de la orden (cliente, items, total, estado, fecha).
+// 404 si no existe, 400 si ya fue entregado.
+// -------------------------------------------------------
+function actionBuscarQR(PDO $pdo): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input || empty($input['codigo_qr'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Código QR vacío.']);
+        return;
+    }
+
+    $codigo = trim((string)$input['codigo_qr']);
+
+    // Buscar la orden por código QR con JOIN del cliente
+    $stmt = $pdo->prepare("
+        SELECT o.id, o.codigo_qr, o.total, o.estado, o.fecha_creacion, o.tipo_pedido,
+               u.usuario AS cliente_nombre
+        FROM ordenes o
+        LEFT JOIN usuarios u ON o.cliente_id = u.id
+        WHERE o.codigo_qr = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$codigo]);
+    $orden = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$orden) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => 'Código QR no encontrado.']);
+        return;
+    }
+
+    // Un pedido ya entregado no se puede reclamar de nuevo
+    if ($orden['estado'] === 'entregado') {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'error' => 'entregado',
+            'message' => 'Este pedido ya fue entregado.',
+            'estado' => $orden['estado']
+        ]);
+        return;
+    }
+
+    // Etiqueta legible de cliente para venta rápida
+    if ($orden['tipo_pedido'] === 'venta_rapida') {
+        $orden['cliente_nombre'] = 'Venta rápida';
+    }
+
+    // Adjuntar items (orden_detalles JOIN productos)
+    $stmtItems = $pdo->prepare("
+        SELECT od.producto_id, od.cantidad, od.precio_unitario,
+               p.nombre AS producto_nombre
+        FROM orden_detalles od
+        JOIN productos p ON od.producto_id = p.id
+        WHERE od.orden_id = ?
+    ");
+    $stmtItems->execute([$orden['id']]);
+    $orden['items'] = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
+
+    echo json_encode(['success' => true, 'orden' => $orden]);
+}
+
+// -------------------------------------------------------
+// POST ?action=reclamar — Entregar pedido listo -> entregado
+// Body JSON: { orden_id }
+// Lock optimista: WHERE id=? AND estado='listo'
+// 404 si no existe, 409 si ya fue entregado, 400 si no está listo.
+// -------------------------------------------------------
+function actionReclamar(PDO $pdo, int $cajero_id): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input || empty($input['orden_id'])) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Falta el ID del pedido.']);
+        return;
+    }
+
+    $orden_id = (int)$input['orden_id'];
+
+    // Lock optimista: solo transición listo -> entregado
+    $stmt = $pdo->prepare("UPDATE ordenes SET estado = 'entregado', cajero_id = ? WHERE id = ? AND estado = 'listo'");
+    $stmt->execute([$cajero_id, $orden_id]);
+
+    if ($stmt->rowCount() === 0) {
+        // Verificar si la orden existe y su estado actual
+        $stmtCheck = $pdo->prepare("SELECT id, estado FROM ordenes WHERE id = ?");
+        $stmtCheck->execute([$orden_id]);
+        $orden = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+
+        if (!$orden) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Pedido no encontrado.']);
+            return;
+        }
+
+        // Ya fue entregado por otro cajero (conflicto)
+        if ($orden['estado'] === 'entregado') {
+            http_response_code(409);
+            echo json_encode([
+                'success' => false,
+                'error' => 'conflict',
+                'message' => 'Este pedido ya fue entregado por otro cajero.'
+            ]);
+            return;
+        }
+
+        // Existe pero no está listo todavía
+        $estadoLabel = [
+            'pendiente'      => 'pendiente',
+            'en_preparacion' => 'en preparación',
+        ];
+        $estado = $orden['estado'];
+        $label = $estadoLabel[$estado] ?? $estado;
+        http_response_code(400);
+        echo json_encode([
+            'success'  => false,
+            'error'    => 'not_ready',
+            'message'  => "Este pedido aún no está listo (estado: {$label}).",
+            'estado'   => $estado
+        ]);
+        return;
+    }
+
+    echo json_encode(['success' => true, 'message' => "Pedido #{$orden_id} entregado."]);
 }
