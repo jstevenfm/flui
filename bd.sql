@@ -56,3 +56,33 @@ CREATE TABLE orden_detalles (
     FOREIGN KEY (producto_id) REFERENCES productos(id)
         ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- DATOS SEMILLA — Cafetería de ejemplo (Fase 3, catálogo)
+-- ============================================================
+
+-- Categorías
+INSERT INTO categorias (nombre, descripcion) VALUES
+    ('Bebidas Calientes', 'Café, chocolate y bebidas calientes de la casa'),
+    ('Bebidas Frías', 'Limonadas, jugos y frappés refrescantes'),
+    ('Postres', 'Brownies, tortas y dulces artesanales'),
+    ('Snacks', 'Empanadas, arepas y pasabocas para acompañar');
+
+-- Productos (precios en COP, stock 0-50)
+-- Bebidas Calientes
+INSERT INTO productos (categoria_id, nombre, precio, stock, imagen) VALUES
+    (1, 'Café Americano',    3500.00, 30, NULL),
+    (1, 'Capuchino',         4500.00, 25, 'capuchino.jpg'),
+    (1, 'Latte',             5000.00, 20, 'latte.jpg'),
+-- Bebidas Frías
+    (2, 'Limonada de Coco',  4000.00, 40, NULL),
+    (2, 'Frappé Caramelo',   6000.00, 18, 'frappe.jpg'),
+    (2, 'Jugo Natural',      3500.00,  8, NULL),
+-- Postres
+    (3, 'Brownie',           4000.00, 12, 'brownie.jpg'),
+    (3, 'Cheesecake',        5500.00,  5, NULL),
+    (3, 'Torta de Chocolate',6000.00,  6, 'torta.jpg'),
+-- Snacks
+    (4, 'Empanada',          3000.00, 50, NULL),
+    (4, 'Arepa de Queso',    3500.00, 14, 'arepa.jpg'),
+    (4, 'Galletas Artesanales',2500.00, 0, NULL);
