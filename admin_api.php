@@ -881,17 +881,197 @@ function actionEliminarProducto(PDO $pdo): void {
     }
 }
 
+// -------------------------------------------------------
+// Helper: validarRangoFechas — valida y normaliza desde/hasta (Y-m-d)
+// Retorna ['ok'=>bool, 'desde'=>string, 'hasta'=>string, 'error'=>string]
+// ok=false si formato inválido o desde > hasta.
+// -------------------------------------------------------
+function validarRangoFechas(): array {
+    $desde = trim((string)($_GET['desde'] ?? ''));
+    $hasta = trim((string)($_GET['hasta'] ?? ''));
+
+    $d = DateTime::createFromFormat('Y-m-d', $desde);
+    $h = DateTime::createFromFormat('Y-m-d', $hasta);
+    // createFromFormat admite fechas con warnings (ej. día 31 en mes de 30); getLastErrors() las detecta.
+    $dErrors = $d ? $d::getLastErrors() : false;
+    $hErrors = $h ? $h::getLastErrors() : false;
+
+    if (!$d || ($dErrors && ($dErrors['warning_count'] > 0 || $dErrors['error_count'] > 0))) {
+        return ['ok' => false, 'error' => 'La fecha "desde" no es válida. Use el formato AAAA-MM-DD.'];
+    }
+    if (!$h || ($hErrors && ($hErrors['warning_count'] > 0 || $hErrors['error_count'] > 0))) {
+        return ['ok' => false, 'error' => 'La fecha "hasta" no es válida. Use el formato AAAA-MM-DD.'];
+    }
+    if ($d > $h) {
+        return ['ok' => false, 'error' => 'La fecha "desde" no puede ser mayor que "hasta".'];
+    }
+
+    return ['ok' => true, 'desde' => $desde, 'hasta' => $hasta];
+}
+
+// -------------------------------------------------------
+// GET ?action=reporte_ventas — Ventas por día en un rango
+// Params: desde, hasta (AAAA-MM-DD). Solo órdenes entregadas.
+// -------------------------------------------------------
 function actionReporteVentas(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $r = validarRangoFechas();
+    if (!$r['ok']) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => $r['error']]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT DATE(o.fecha_creacion) AS fecha,
+                   COUNT(*) AS ordenes,
+                   COALESCE(SUM(o.total), 0) AS total
+            FROM ordenes o
+            WHERE o.estado = 'entregado'
+              AND o.fecha_creacion BETWEEN ? AND ?
+            GROUP BY DATE(o.fecha_creacion)
+            ORDER BY fecha DESC
+        ");
+        // BETWEEN intervalo completo del día inicial al último segundo del día final
+        $stmt->execute([
+            $r['desde'] . ' 00:00:00',
+            $r['hasta'] . ' 23:59:59',
+        ]);
+        $ventas = $stmt->fetchAll();
+
+        // Normalizar tipos numéricos (PDO-mysql returns strings por defecto)
+        foreach ($ventas as &$row) {
+            $row['ordenes'] = (int)$row['ordenes'];
+            $row['total'] = (float)$row['total'];
+        }
+        unset($row);
+
+        echo json_encode([
+            'success' => true,
+            'desde' => $r['desde'],
+            'hasta' => $r['hasta'],
+            'ventas' => $ventas,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// GET ?action=reporte_productos — Top 20 productos por cantidad vendida
+// Params: desde, hasta (AAAA-MM-DD). Solo órdenes entregadas.
+// -------------------------------------------------------
 function actionReporteProductos(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $r = validarRangoFechas();
+    if (!$r['ok']) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => $r['error']]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT p.nombre,
+                   SUM(od.cantidad) AS cantidad,
+                   SUM(od.cantidad * od.precio_unitario) AS total
+            FROM orden_detalles od
+            JOIN ordenes o ON od.orden_id = o.id
+            JOIN productos p ON od.producto_id = p.id
+            WHERE o.estado = 'entregado'
+              AND o.fecha_creacion BETWEEN ? AND ?
+            GROUP BY p.id
+            ORDER BY cantidad DESC
+            LIMIT 20
+        ");
+        $stmt->execute([
+            $r['desde'] . ' 00:00:00',
+            $r['hasta'] . ' 23:59:59',
+        ]);
+        $productos = $stmt->fetchAll();
+
+        foreach ($productos as &$row) {
+            $row['cantidad'] = (int)$row['cantidad'];
+            $row['total'] = (float)$row['total'];
+        }
+        unset($row);
+
+        echo json_encode([
+            'success' => true,
+            'desde' => $r['desde'],
+            'hasta' => $r['hasta'],
+            'productos' => $productos,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// GET ?action=reporte_cajeros — Ventas por cajero en un rango
+// Params: desde, hasta (AAAA-MM-DD). Solo órdenes entregadas.
+// Incluye venta_rapida (cajero_id siempre asignado).
+// -------------------------------------------------------
 function actionReporteCajeros(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $r = validarRangoFechas();
+    if (!$r['ok']) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => $r['error']]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT u.usuario,
+                   COUNT(*) AS ordenes,
+                   COALESCE(SUM(o.total), 0) AS total
+            FROM ordenes o
+            JOIN usuarios u ON o.cajero_id = u.id
+            WHERE o.estado = 'entregado'
+              AND o.fecha_creacion BETWEEN ? AND ?
+              AND o.cajero_id IS NOT NULL
+            GROUP BY u.id
+            ORDER BY total DESC
+        ");
+        $stmt->execute([
+            $r['desde'] . ' 00:00:00',
+            $r['hasta'] . ' 23:59:59',
+        ]);
+        $cajeros = $stmt->fetchAll();
+
+        foreach ($cajeros as &$row) {
+            $row['ordenes'] = (int)$row['ordenes'];
+            $row['total'] = (float)$row['total'];
+        }
+        unset($row);
+
+        echo json_encode([
+            'success' => true,
+            'desde' => $r['desde'],
+            'hasta' => $r['hasta'],
+            'cajeros' => $cajeros,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
