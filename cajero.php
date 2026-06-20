@@ -36,7 +36,7 @@ $nombre = $_SESSION['usuario_nombre'];
         <button class="cajero-tab" data-tab="nueva-venta">
             <i class="fa-solid fa-cart-plus"></i> Nueva Venta
         </button>
-        <button class="cajero-tab" data-tab="escanear" disabled>
+        <button class="cajero-tab" data-tab="escanear">
             <i class="fa-solid fa-qrcode"></i> Escanear QR
         </button>
     </nav>
@@ -156,15 +156,70 @@ $nombre = $_SESSION['usuario_nombre'];
         </div>
     </div>
 
-    <!-- Pane: Escanear QR (placeholder - PR3) -->
+    <!-- Pane: Escanear QR -->
     <div class="cajero-pane" id="pane-escanear">
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-qrcode"></i>
-            <p>Escanear QR</p>
-            <p style="font-size: 0.85rem;">Próximamente...</p>
+        <div class="escanear-header">
+            <h2><i class="fa-solid fa-qrcode"></i> Escanear QR</h2>
+            <p class="escanear-subtitle">Escanea el código del cliente para buscar un pedido listo</p>
+        </div>
+
+        <!-- Mensajes de estado (éxito/error) -->
+        <div class="escanear-mensaje hidden" id="escanear-mensaje"></div>
+
+        <!-- Sección del escáner webcam -->
+        <div class="escanear-scanner-container" id="escaner-container">
+            <div class="escanear-status" id="escaner-status">
+                <i class="fa-solid fa-camera"></i> <span>Escáner detenido</span>
+            </div>
+            <div id="qr-reader" class="qr-reader"></div>
+            <div class="escaner-controls">
+                <button class="btn-escanear" id="btn-iniciar-escaner" type="button">
+                    <i class="fa-solid fa-camera"></i> Iniciar Escáner
+                </button>
+                <button class="btn-escanear hidden" id="btn-detener-escaner" type="button">
+                    <i class="fa-solid fa-stop"></i> Detener
+                </button>
+            </div>
+            <!-- Error de permisos: el fallback manual siempre está visible debajo -->
+            <div class="escanear-camara-error hidden" id="camara-error">
+                <i class="fa-solid fa-camera-slash"></i>
+                <p>No se pudo acceder a la cámara. Usa el ingreso manual debajo.</p>
+            </div>
+        </div>
+
+        <!-- Ingreso manual (siempre visible — accesibilidad) -->
+        <div class="escanear-manual">
+            <h3><i class="fa-solid fa-keyboard"></i> Ingreso manual</h3>
+            <div class="escanear-manual-input">
+                <input type="text" id="codigo-manual" placeholder="Ej: FLUI-ABC123" autocomplete="off" />
+                <button class="btn-manual" id="btn-buscar-manual" type="button">
+                    <i class="fa-solid fa-magnifying-glass"></i> Buscar
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel de verificación (oculto hasta encontrar la orden) -->
+        <div class="escanear-verificacion hidden" id="verificacion-panel">
+            <div class="verificacion-card">
+                <div class="verificacion-header">
+                    <h3><i class="fa-solid fa-receipt"></i> Verificar Pedido</h3>
+                    <button class="btn-verificacion-cerrar" id="btn-cancelar-verificacion" type="button" title="Cancelar">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="verificacion-body" id="verificacion-body">
+                    <!-- Se llena dinámicamente tras buscar_qr -->
+                </div>
+                <div class="verificacion-actions">
+                    <button class="btn-reclamar" id="btn-reclamar" type="button">
+                        <i class="fa-solid fa-hand-holding-heart"></i> Reclamar Pedido
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
+<script src="https://unpkg.com/html5-qrcode"></script>
 <script>
 // === Estado global ===
 let pedidosData = [];
@@ -620,6 +675,250 @@ document.getElementById('venta-productos').addEventListener('click', e => {
 // === Botones del carrito ===
 document.getElementById('btn-vaciar-venta').addEventListener('click', vaciarCarritoVenta);
 document.getElementById('btn-completar-venta').addEventListener('click', completarVenta);
+
+// ═══════════════════════════════════════════════════════
+// ESCANEAR QR — Escáner webcam + ingreso manual + reclamar
+// ═══════════════════════════════════════════════════════
+
+let html5QrCode = null;
+let escanerActivo = false;
+let ordenActualId = null; // orden mostrada en el panel de verificación
+
+// === Mostrar mensaje en el bloque de estado de escaneo ===
+function mostrarMensajeEscaneo(tipo, texto) {
+    const box = document.getElementById('escanear-mensaje');
+    box.className = 'escanear-mensaje ' + tipo;
+    box.innerHTML = (tipo === 'exito'
+        ? '<i class="fa-solid fa-circle-check"></i> '
+        : '<i class="fa-solid fa-triangle-exclamation"></i> ')
+        + escapeHtml(texto);
+    if (tipo === 'exito') {
+        setTimeout(() => box.classList.add('hidden'), 5000);
+    }
+}
+
+// === Set estado del escáner ===
+function setEscanerStatus(texto, icono) {
+    const status = document.getElementById('escaner-status');
+    status.innerHTML = '<i class="fa-solid fa-' + icono + '"></i> <span>' + escapeHtml(texto) + '</span>';
+}
+
+// === Iniciar escáner de cámara ===
+async function iniciarEscanner() {
+    if (escanerActivo) return;
+
+    const reader = document.getElementById('qr-reader');
+    reader.innerHTML = '';
+
+    setEscanerStatus('Iniciando cámara...', 'spinner fa-spin');
+    document.getElementById('camara-error').classList.add('hidden');
+
+    try {
+        html5QrCode = new Html5Qrcode('qr-reader');
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+        await html5QrCode.start(
+            { facingMode: 'environment' },
+            config,
+            onScanExitoso
+        );
+
+        escanerActivo = true;
+        setEscanerStatus('Escaneando...', 'camera');
+        document.getElementById('btn-iniciar-escaner').classList.add('hidden');
+        document.getElementById('btn-detener-escaner').classList.remove('hidden');
+    } catch (err) {
+        console.error('Error al iniciar cámara:', err);
+        setEscanerStatus('Cámara no disponible', 'camera-slash');
+        document.getElementById('camara-error').classList.remove('hidden');
+        mostrarMensajeEscaneo('error', 'No se pudo acceder a la cámara. Usa el ingreso manual.');
+    }
+}
+
+// === Detener escáner ===
+async function detenerEscanner() {
+    if (!escanerActivo || !html5QrCode) return;
+    try {
+        await html5QrCode.stop();
+    } catch (e) { /* ignorar si ya está detenido */ }
+    html5QrCode = null;
+    escanerActivo = false;
+    document.getElementById('qr-reader').innerHTML = '';
+    setEscanerStatus('Escáner detenido', 'camera');
+    document.getElementById('btn-iniciar-escaner').classList.remove('hidden');
+    document.getElementById('btn-detener-escaner').classList.add('hidden');
+}
+
+// === Callback tras escaneo exitoso ===
+async function onScanExitoso(codigo) {
+    // Detener para no escanear varias veces seguidas
+    await detenerEscanner();
+    await buscarOrdenQR(codigo);
+}
+
+// === Buscar orden por código QR ===
+async function buscarOrdenQR(codigo) {
+    mostrarMensajeEscaneo('info', 'Buscando pedido: ' + codigo);
+    try {
+        const resp = await fetch('cajero_api.php?action=buscar_qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo_qr: codigo })
+        });
+
+        const data = await resp.json();
+
+        if (resp.status === 401) { window.location.href = 'login.php'; return; }
+        if (resp.status === 403) { window.location.href = 'login.php'; return; }
+
+        if (!data.success) {
+            ocultarVerificacion();
+            if (resp.status === 404) {
+                mostrarMensajeEscaneo('error', 'Código QR no encontrado.');
+            } else if (data.error === 'entregado') {
+                mostrarMensajeEscaneo('error', 'Este pedido ya fue entregado.');
+            } else {
+                mostrarMensajeEscaneo('error', data.message || data.error || 'Error al buscar el pedido.');
+            }
+            return;
+        }
+
+        mostrarVerificacion(data.orden);
+    } catch (e) {
+        mostrarMensajeEscaneo('error', 'Error de conexión. Intenta de nuevo.');
+    }
+}
+
+// === Mostrar panel de verificación ===
+function mostrarVerificacion(orden) {
+    ordenActualId = orden.id;
+
+    const estadoLabel = {
+        pendiente: 'Pendiente',
+        en_preparacion: 'En preparación',
+        listo: 'Listo',
+        entregado: 'Entregado'
+    };
+    const label = estadoLabel[orden.estado] || orden.estado;
+
+    let itemsHtml = (orden.items && orden.items.length > 0)
+        ? orden.items.map(i =>
+            `<li><span class="vi-nombre">${escapeHtml(i.producto_nombre)}</span>
+                 <span class="vi-cant">x${i.cantidad}</span>
+                 <span class="vi-precio">$${formatoPrecio(i.precio_unitario)}</span></li>`).join('')
+        : '<li class="vi-vacio">Sin detalles</li>';
+
+    let fechaStr = '';
+    try {
+        const f = new Date(orden.fecha_creacion + (orden.fecha_creacion.indexOf('Z') === -1 ? 'Z' : ''));
+        fechaStr = f.toLocaleString('es-CO');
+    } catch (e) { fechaStr = orden.fecha_creacion; }
+
+    const body = document.getElementById('verificacion-body');
+    body.innerHTML = `
+        <div class="vi-fila"><span class="vi-label">Pedido</span><span class="vi-valor">#${orden.id}</span></div>
+        <div class="vi-fila"><span class="vi-label">Cliente</span><span class="vi-valor">${escapeHtml(orden.cliente_nombre || 'Venta rápida')}</span></div>
+        <div class="vi-fila"><span class="vi-label">Fecha</span><span class="vi-valor">${escapeHtml(fechaStr)}</span></div>
+        <div class="vi-fila"><span class="vi-label">Estado</span><span class="vi-valor"><span class="estado-badge estado-${orden.estado}">${label}</span></span></div>
+        <div class="vi-subtitulo">Items</div>
+        <ul class="vi-items">${itemsHtml}</ul>
+        <div class="vi-total"><span>Total</span><span>$${formatoPrecio(orden.total)}</span></div>
+    `;
+
+    const panel = document.getElementById('verificacion-panel');
+    const btnReclamar = document.getElementById('btn-reclamar');
+
+    // Solo se puede reclamar si está listo
+    if (orden.estado === 'listo') {
+        btnReclamar.disabled = false;
+        btnReclamar.classList.remove('hidden');
+        mostrarMensajeEscaneo('success-info', 'Pedido listo para reclamar.');
+    } else {
+        btnReclamar.disabled = true;
+        btnReclamar.classList.remove('hidden');
+        mostrarMensajeEscaneo('error', `Este pedido aún no está listo (estado: ${label}).`);
+    }
+
+    panel.classList.remove('hidden');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// === Ocultar panel de verificación y resetear ===
+function ocultarVerificacion() {
+    ordenActualId = null;
+    const panel = document.getElementById('verificacion-panel');
+    panel.classList.add('hidden');
+    document.getElementById('verificacion-body').innerHTML = '';
+}
+
+// === Reclamar (entregar) pedido ===
+async function reclamarPedido() {
+    if (!ordenActualId) return;
+    const btn = document.getElementById('btn-reclamar');
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Entregando...';
+
+    try {
+        const resp = await fetch('cajero_api.php?action=reclamar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orden_id: ordenActualId })
+        });
+
+        const data = await resp.json();
+
+        if (resp.status === 401 || resp.status === 403) { window.location.href = 'login.php'; return; }
+
+        if (data.success) {
+            mostrarMensajeEscaneo('exito', data.message || 'Pedido entregado.');
+            ocultarVerificacion();
+            // Refrescar lista de pedidos para que el pedido desaparezca de la columna Listos
+            cargarPedidos();
+            // Volver al escáner si estaba activo
+            setTimeout(() => iniciarEscanner(), 800);
+        } else {
+            if (resp.status === 404) {
+                mostrarMensajeEscaneo('error', 'Pedido no encontrado.');
+            } else if (resp.status === 409) {
+                mostrarMensajeEscaneo('error', data.message || 'Este pedido ya fue entregado por otro cajero.');
+            } else if (data.error === 'not_ready') {
+                mostrarMensajeEscaneo('error', data.message || 'El pedido aún no está listo.');
+            } else {
+                mostrarMensajeEscaneo('error', data.message || data.error || 'Error al reclamar.');
+            }
+            btn.disabled = false;
+        }
+    } catch (e) {
+        mostrarMensajeEscaneo('error', 'Error de conexión. Intenta de nuevo.');
+        btn.disabled = false;
+    } finally {
+        if (ordenActualId !== null) {
+            btn.innerHTML = original;
+        }
+    }
+}
+
+// === Listeners del escáner ===
+document.getElementById('btn-iniciar-escaner').addEventListener('click', iniciarEscanner);
+document.getElementById('btn-detener-escaner').addEventListener('click', detenerEscanner);
+document.getElementById('btn-buscar-manual').addEventListener('click', () => {
+    const cod = document.getElementById('codigo-manual').value.trim();
+    if (cod) buscarOrdenQR(cod);
+});
+document.getElementById('codigo-manual').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        const cod = e.target.value.trim();
+        if (cod) buscarOrdenQR(cod);
+    }
+});
+document.getElementById('btn-reclamar').addEventListener('click', reclamarPedido);
+document.getElementById('btn-cancelar-verificacion').addEventListener('click', () => {
+    ocultarVerificacion();
+    mostrarMensajeEscaneo('info', 'Operación cancelada.');
+    // Reiniciar escáner si estaba activo
+    if (!escanerActivo) iniciarEscanner();
+});
 </script>
 
 </body>
