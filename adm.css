@@ -570,6 +570,13 @@ body {
     flex-wrap: wrap;
 }
 
+/* Textarea específica para formularios (descripcion, etc.) */
+.form-textarea {
+    min-height: 80px;
+    resize: vertical;
+    line-height: 1.5;
+}
+
 /* ========== Botones ========== */
 .btn-primary {
     background: var(--accent);
@@ -690,6 +697,31 @@ body {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
+}
+
+/* ========== Badge conteo de productos (categorías) ========== */
+.product-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    background: rgba(108, 117, 125, 0.18);
+    color: var(--muted);
+}
+
+.product-count-active {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+
+/* Texto atenuado para campos vacíos ("—") */
+.text-muted {
+    color: var(--text-dim);
+    opacity: 0.6;
 }
 
 /* ========== Responsive ========== */
