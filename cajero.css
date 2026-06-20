@@ -798,3 +798,359 @@ body {
         max-height: none;
     }
 }
+
+/* ═══════════════════════════════════════════════════════
+   ESCANEAR QR — Escáner webcam + ingreso manual + reclamar
+   ═══════════════════════════════════════════════════════ */
+
+/* Header de la pestaña */
+.escanear-header {
+    margin-bottom: 18px;
+}
+.escanear-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+.escanear-subtitle {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+}
+
+/* Mensaje de estado (éxito / error / info) */
+.escanear-mensaje {
+    padding: 12px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.escanear-mensaje.hidden { display: none; }
+.escanear-mensaje.error {
+    background: rgba(231, 76, 60, 0.15);
+    color: var(--danger);
+}
+.escanear-mensaje.exito {
+    background: rgba(40, 167, 69, 0.15);
+    color: var(--success);
+}
+.escanear-mensaje.info {
+    background: rgba(23, 162, 184, 0.15);
+    color: var(--info);
+}
+.escanear-mensaje.success-info {
+    background: rgba(94, 255, 196, 0.10);
+    color: var(--accent);
+}
+
+/* Contenedor del escáner */
+.escanear-scanner-container {
+    max-width: 500px;
+    margin: 0 auto 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+
+/* Indicador de estado del escáner */
+.escanear-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    background: var(--bg-input);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+}
+.escanear-status .fa-spinner {
+    animation: fa-spin 1s linear infinite;
+}
+
+/* Contenedor del lector QR (html5-qrcode inyecta un video aquí) */
+.qr-reader {
+    width: 100%;
+    min-height: 240px;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.qr-reader:empty::before {
+    content: '';
+}
+.qr-reader video,
+.qr-reader img {
+    width: 100% !important;
+    max-height: 360px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+}
+
+/* Controles del escáner */
+.escaner-controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+.btn-escanear {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: 0.2s;
+}
+.btn-escanear:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: scale(1.02);
+}
+.btn-escanear.hidden { display: none; }
+
+/* Error de cámara */
+.escanear-camara-error {
+    margin-top: 14px;
+    padding: 12px;
+    background: rgba(231, 76, 60, 0.10);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: var(--radius-sm);
+    color: var(--danger);
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.escanear-camara-error i { font-size: 1.4rem; }
+.escanear-camara-error.hidden { display: none; }
+
+/* Ingreso manual — separado visualmente del escáner */
+.escanear-manual {
+    max-width: 500px;
+    margin: 0 auto 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+.escanear-manual h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-white);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.escanear-manual h3 i { color: var(--accent); }
+.escanear-manual-input {
+    display: flex;
+    gap: 8px;
+}
+.escanear-manual-input input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    color: var(--text-white);
+    font-size: 0.9rem;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.escanear-manual-input input:focus {
+    border-color: var(--accent);
+}
+.escanear-manual-input input::placeholder {
+    color: var(--text-dim);
+}
+.btn-manual {
+    background: var(--bg-input);
+    color: var(--accent);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: 0.2s;
+    white-space: nowrap;
+}
+.btn-manual:hover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+/* Panel de verificación */
+.escanear-verificacion {
+    max-width: 500px;
+    margin: 0 auto;
+}
+.escanear-verificacion.hidden { display: none; }
+
+.verificacion-card {
+    background: var(--bg-card);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.verificacion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--accent-dim);
+}
+.verificacion-header h3 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--accent);
+}
+.btn-verificacion-cerrar {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: 0.2s;
+}
+.btn-verificacion-cerrar:hover {
+    color: var(--danger);
+    background: rgba(231, 76, 60, 0.15);
+}
+
+.verificacion-body {
+    padding: 16px;
+}
+.vi-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+.vi-fila:last-child { border-bottom: none; }
+.vi-label { color: var(--text-dim); font-weight: 600; }
+.vi-valor { color: var(--text-white); font-weight: 600; }
+.vi-subtitulo {
+    margin-top: 14px;
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+}
+.vi-items {
+    list-style: none;
+    padding: 0;
+}
+.vi-items li {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px dotted var(--border);
+    font-size: 0.82rem;
+}
+.vi-items li:last-child { border-bottom: none; }
+.vi-nombre { color: var(--text-white); }
+.vi-cant { color: var(--text-dim); font-weight: 600; }
+.vi-precio { color: var(--accent); font-weight: 600; }
+.vi-vacio { color: var(--text-dim); font-style: italic; }
+
+.vi-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 2px solid var(--accent);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+.vi-total span:first-child { color: var(--text-dim); }
+.vi-total span:last-child { color: var(--accent); }
+
+/* Acciones del panel de verificación */
+.verificacion-actions {
+    padding: 14px 16px;
+    border-top: 1px solid var(--border);
+}
+.btn-reclamar {
+    width: 100%;
+    background: var(--success);
+    color: #fff;
+    border: none;
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: 0.2s;
+}
+.btn-reclamar:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: scale(1.01);
+}
+.btn-reclamar:disabled {
+    background: var(--bg-input);
+    color: var(--text-dim);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/*responsive escáner */
+@media (max-width: 540px) {
+    .escanear-scanner-container,
+    .escanear-manual,
+    .escanear-verificacion {
+        max-width: 100%;
+    }
+    .qr-reader {
+        min-height: 200px;
+    }
+    .vi-items li {
+        grid-template-columns: 1fr auto;
+    }
+    .vi-items li .vi-precio {
+        grid-column: 1 / -1;
+        text-align: right;
+    }
+}
