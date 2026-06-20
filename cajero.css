@@ -1,0 +1,382 @@
+/* cajero.css — Vista del cajero: dashboard de pedidos, tabs, tarjetas de orden
+   Tokens consistentes con cliente.css (Inter, --accent, --bg-dark, etc.) */
+
+:root {
+    --bg-dark: #0f0f17;
+    --bg-card: #161624;
+    --bg-input: #1b1b2f;
+    --accent: #5effc4;
+    --accent-dim: rgba(94, 255, 196, 0.12);
+    --text-white: #ffffff;
+    --text-dim: #8a8a9d;
+    --border: #2a2a3d;
+    --danger: #e74c3c;
+    --warning: #ffc107;
+    --info: #17a2b8;
+    --success: #28a745;
+    --muted: #6c757d;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --radius: 16px;
+    --radius-sm: 10px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-white);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+/* ---------- Header ---------- */
+.cajero-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(15, 15, 23, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.cajero-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.cajero-brand .brand-icon {
+    background: var(--accent);
+    color: #000;
+    padding: 7px;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+.cajero-brand h1 {
+    font-size: 1.3rem;
+    color: var(--accent);
+}
+.cajero-user {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 0.85rem;
+    color: var(--text-dim);
+}
+.cajero-user strong { color: var(--text-white); }
+.cajero-user a {
+    color: var(--danger);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+.cajero-user a:hover { text-decoration: underline; }
+
+/* ---------- Tab bar ---------- */
+.cajero-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
+}
+.cajero-tab {
+    flex: 1;
+    padding: 14px 8px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+.cajero-tab:hover {
+    color: var(--text-white);
+}
+.cajero-tab.active {
+    color: var(--accent);
+}
+.cajero-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 3px 3px 0 0;
+}
+.cajero-tab:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+/* ---------- Pane container ---------- */
+.cajero-pane {
+    display: none;
+    padding: 20px 18px 90px;
+    min-height: 60vh;
+}
+.cajero-pane.active {
+    display: block;
+}
+
+/* ---------- Pedidos: header con refresh ---------- */
+.pedidos-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+.pedidos-header h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+.btn-refresh {
+    background: var(--bg-input);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: 0.2s;
+}
+.btn-refresh:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.btn-refresh:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.btn-refresh .fa-spin {
+    animation: fa-spin 1s linear infinite;
+}
+
+/* ---------- Error toast ---------- */
+.pedidos-error {
+    background: rgba(231, 76, 60, 0.15);
+    color: var(--danger);
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.pedidos-error.hidden { display: none; }
+
+/* ---------- Status columns (Kanban layout) ---------- */
+.pedidos-columns {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+}
+@media (min-width: 768px) {
+    .pedidos-columns {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.status-column {}
+.status-column-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.status-column-header h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.status-column-header .count {
+    background: var(--bg-input);
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+}
+
+/* Status column color accents */
+.status-column.col-pendiente .status-column-header { color: var(--warning); }
+.status-column.col-en_preparacion .status-column-header { color: var(--info); }
+.status-column.col-listo .status-column-header { color: var(--success); }
+
+/* ---------- Order cards ---------- */
+.orden-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 10px;
+    transition: transform 0.2s, border-color 0.2s, opacity 0.3s;
+}
+.orden-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+}
+.orden-card.fade-out {
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+}
+
+.orden-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.orden-card-id {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+.orden-card-time {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+.orden-card-client {
+    font-size: 0.82rem;
+    color: var(--text-white);
+    margin-bottom: 6px;
+}
+
+/* Status badges — reusing cliente.css pattern */
+.estado-badge {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    display: inline-block;
+}
+.estado-pendiente      { background: rgba(255, 193, 7, 0.15); color: var(--warning); }
+.estado-en_preparacion { background: rgba(23, 162, 184, 0.15); color: var(--info); }
+.estado-listo          { background: rgba(40, 167, 69, 0.15); color: var(--success); }
+.estado-entregado      { background: rgba(108, 117, 125, 0.15); color: var(--muted); }
+
+.orden-card-items {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+.orden-card-items span {
+    color: var(--text-white);
+}
+
+.orden-card-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+.orden-card-total {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* Status transition buttons */
+.btn-estado {
+    border: none;
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: transform 0.15s, opacity 0.2s;
+}
+.btn-estado:hover { transform: scale(1.04); }
+.btn-estado:active { transform: scale(0.97); }
+.btn-estado:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-preparar {
+    background: rgba(23, 162, 184, 0.2);
+    color: var(--info);
+}
+.btn-preparar:hover { background: rgba(23, 162, 184, 0.35); }
+
+.btn-listo {
+    background: rgba(40, 167, 69, 0.2);
+    color: var(--success);
+}
+.btn-listo:hover { background: rgba(40, 167, 69, 0.35); }
+
+.btn-entregar {
+    background: rgba(108, 117, 125, 0.2);
+    color: var(--muted);
+}
+.btn-entregar:hover { background: rgba(108, 117, 125, 0.35); }
+
+/* ---------- Empty state ---------- */
+.empty-state {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 30px 10px;
+    font-size: 0.85rem;
+}
+.empty-state i {
+    font-size: 1.8rem;
+    opacity: 0.4;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* ---------- Placeholder tabs (PR2/PR3) ---------- */
+.tab-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 50vh;
+    color: var(--text-dim);
+    text-align: center;
+    gap: 12px;
+}
+.tab-placeholder i {
+    font-size: 3rem;
+    opacity: 0.3;
+}
+.tab-placeholder p {
+    font-size: 1rem;
+}
+
+/* ---------- Responsive ---------- */
+@media (min-width: 640px) {
+    .cajero-header { padding: 16px 28px; }
+    .cajero-pane { padding: 24px 28px 90px; }
+}
+
+@media (min-width: 1024px) {
+    .pedidos-header h2 { font-size: 1.4rem; }
+    .orden-card { padding: 16px; }
+}
