@@ -372,9 +372,56 @@ $nombre = $_SESSION['usuario_nombre'];
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span id="reportes-error-text"></span>
         </div>
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-file-invoice"></i>
-            <p>Reportes de ventas — próximamente</p>
+
+        <div class="pane-head">
+            <h2 class="section-title"><i class="fa-solid fa-file-invoice"></i> Reportes de Ventas</h2>
+        </div>
+
+        <!-- Selector de rango de fechas -->
+        <div class="date-picker">
+            <div class="preset-group">
+                <button class="btn-preset" data-preset="hoy">Hoy</button>
+                <button class="btn-preset" data-preset="semana">Semana</button>
+                <button class="btn-preset" data-preset="mes">Mes</button>
+                <button class="btn-preset" data-preset="anio">Año</button>
+            </div>
+            <div class="custom-range">
+                <div class="form-group form-group-inline">
+                    <label for="reporte-desde">Desde</label>
+                    <input type="date" id="reporte-desde">
+                </div>
+                <div class="form-group form-group-inline">
+                    <label for="reporte-hasta">Hasta</label>
+                    <input type="date" id="reporte-hasta">
+                </div>
+                <button class="btn-primary" id="btn-consultar-reportes">
+                    <i class="fa-solid fa-magnifying-glass"></i> Consultar
+                </button>
+            </div>
+        </div>
+
+        <!-- Sección 1: Ventas del período -->
+        <div class="reporte-section">
+            <h3 class="reporte-subtitle"><i class="fa-solid fa-chart-column"></i> Ventas del Período</h3>
+            <div class="table-responsive" id="reporte-ventas-container">
+                <div class="reporte-hint">Selecciona un rango de fechas para ver el reporte.</div>
+            </div>
+        </div>
+
+        <!-- Sección 2: Top productos -->
+        <div class="reporte-section">
+            <h3 class="reporte-subtitle"><i class="fa-solid fa-trophy"></i> Top Productos</h3>
+            <div class="table-responsive" id="reporte-productos-container">
+                <div class="reporte-hint">Selecciona un rango de fechas para ver el reporte.</div>
+            </div>
+        </div>
+
+        <!-- Sección 3: Ventas por cajero -->
+        <div class="reporte-section">
+            <h3 class="reporte-subtitle"><i class="fa-solid fa-user-tie"></i> Ventas por Cajero</h3>
+            <div class="table-responsive" id="reporte-cajeros-container">
+                <div class="reporte-hint">Selecciona un rango de fechas para ver el reporte.</div>
+            </div>
         </div>
     </div>
 
@@ -449,7 +496,8 @@ function activarTab(tabName) {
             case 'cajeros': cargarCajeros(); break;
             case 'categorias': cargarCategorias(); break;
             case 'productos': cargarProductos(); break;
-            // Other tabs will load in future slices
+            case 'reportes': cargarReportes(); break;
+            case 'escanear': if (typeof iniciarTabEscanear === 'function') iniciarTabEscanear(); break;
         }
     }
 }
@@ -1221,6 +1269,227 @@ async function eliminarProducto(id) {
         mostrarToast('error', 'Error de conexión.');
     }
 }
+
+// =========================================================
+// Reportes (Slice 5)
+// =========================================================
+
+// --- Formatea fecha AAAA-MM-DD a dd/mes (legible) ---
+function formatearFechaCorta(fechaStr) {
+    if (!fechaStr) return '—';
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    // fechaStr viene como 'YYYY-MM-DD' desde la BD — crear fecha local sin desplazamiento de zona
+    const partes = fechaStr.substring(0, 10).split('-');
+    if (partes.length !== 3) return fechaStr;
+    return parseInt(partes[2], 10) + '/' + meses[parseInt(partes[1], 10) - 1];
+}
+
+// --- Calcula el rango (desde/hasta) para cada preset ---
+function rangoPreset(preset) {
+    const hoy = new Date();
+    const hasta = new Date(hoy);
+    const desde = new Date(hoy);
+
+    switch (preset) {
+        case 'hoy':
+            // desde y hasta = hoy
+            break;
+        case 'semana':
+            // últimos 7 días (incluyendo hoy)
+            desde.setDate(hoy.getDate() - 6);
+            break;
+        case 'mes':
+            // último 30 días (aprox. un mes, tope 31 filas por día)
+            desde.setDate(hoy.getDate() - 29);
+            break;
+        case 'anio':
+            // último 365 días
+            desde.setDate(hoy.getDate() - 364);
+            break;
+    }
+    return { desde: aAAAAMMDD(desde), hasta: aAAAAMMDD(hasta) };
+}
+
+// --- Convierte Date a string 'YYYY-MM-DD' (zona local) ---
+function aAAAAMMDD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+}
+
+// --- Vacía una sección de reporte mostrando el estado adecuado ---
+function setReporteVacio(containerId) {
+    document.getElementById(containerId).innerHTML =
+        '<div class="reporte-vacio"><i class="fa-solid fa-folder-open"></i><p>Sin datos para este período.</p></div>';
+}
+
+function setReporteCargando(containerId) {
+    document.getElementById(containerId).innerHTML =
+        '<div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+}
+
+function setReporteError(containerId, mensaje) {
+    document.getElementById(containerId).innerHTML =
+        '<div class="reporte-vacio reporte-error"><i class="fa-solid fa-triangle-exclamation"></i><p>' + escapeHtml(mensaje) + '</p></div>';
+}
+
+// --- Carga inicial: preset "Mes" por defecto ---
+async function cargarReportes() {
+    const rango = rangoPreset('mes');
+    document.getElementById('reporte-desde').value = rango.desde;
+    document.getElementById('reporte-hasta').value = rango.hasta;
+    marcarPreset('mes');
+    await consultarReportes(rango.desde, rango.hasta);
+}
+
+// --- Marca el preset activo visualmente ---
+function marcarPreset(preset) {
+    document.querySelectorAll('.btn-preset').forEach(b => {
+        b.classList.toggle('active', b.dataset.preset === preset);
+    });
+}
+
+// --- Dispara los 3 fetch al cambiar rango ---
+async function consultarReportes(desde, hasta) {
+    const errorBox = document.getElementById('reportes-error');
+    const errorText = document.getElementById('reportes-error-text');
+    errorBox.classList.add('hidden');
+
+    if (!desde || !hasta) {
+        errorText.textContent = 'Selecciona ambas fechas del rango.';
+        errorBox.classList.remove('hidden');
+        return;
+    }
+    if (desde > hasta) {
+        errorText.textContent = 'La fecha "desde" no puede ser mayor que "hasta".';
+        errorBox.classList.remove('hidden');
+        return;
+    }
+
+    // Disparar las 3 consultas en paralelo
+    fetchReporte('ventas', desde, hasta);
+    fetchReporte('productos', desde, hasta);
+    fetchReporte('cajeros', desde, hasta);
+}
+
+// --- Fetch + render de un reporte individual ---
+async function fetchReporte(tipo, desde, hasta) {
+    const containerId = 'reporte-' + tipo + '-container';
+    const action = 'reporte_' + tipo;
+    setReporteCargando(containerId);
+
+    try {
+        const resp = await fetch('admin_api.php?action=' + action + '&desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta));
+        const data = await resp.json();
+
+        if (!data.success) {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = 'login.php';
+                return;
+            }
+            setReporteError(containerId, data.error || data.message || 'Error al cargar el reporte.');
+            return;
+        }
+
+        if (tipo === 'ventas') {
+            renderReporteVentas(data.ventas || []);
+        } else if (tipo === 'productos') {
+            renderReporteProductos(data.productos || []);
+        } else if (tipo === 'cajeros') {
+            renderReporteCajeros(data.cajeros || []);
+        }
+    } catch (e) {
+        setReporteError(containerId, 'Error de conexión.');
+    }
+}
+
+// --- Render: Ventas del período ---
+function renderReporteVentas(ventas) {
+    const container = document.getElementById('reporte-ventas-container');
+    if (!ventas.length) { setReporteVacio('reporte-ventas-container'); return; }
+
+    let html = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>Fecha</th><th># Órdenes</th><th>Total</th>'
+        + '</tr></thead><tbody>';
+    let totalOrd = 0;
+    let total$ = 0;
+    ventas.forEach(v => {
+        totalOrd += v.ordenes;
+        total$ += v.total;
+        html += '<tr>'
+            + '<td data-label="Fecha">' + escapeHtml(formatearFechaCorta(v.fecha)) + '</td>'
+            + '<td data-label="# Órdenes">' + v.ordenes + '</td>'
+            + '<td data-label="Total">$' + formatoPrecio(v.total) + '</td>'
+            + '</tr>';
+    });
+    // Fila de totales
+    html += '<tr class="reporte-totales">'
+        + '<td data-label="Fecha"><strong>Total</strong></td>'
+        + '<td data-label="# Órdenes"><strong>' + totalOrd + '</strong></td>'
+        + '<td data-label="Total"><strong>$' + formatoPrecio(total$) + '</strong></td>'
+        + '</tr>';
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Render: Top productos ---
+function renderReporteProductos(productos) {
+    const container = document.getElementById('reporte-productos-container');
+    if (!productos.length) { setReporteVacio('reporte-productos-container'); return; }
+
+    let html = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>#</th><th>Producto</th><th>Cantidad Vendida</th><th>Total</th>'
+        + '</tr></thead><tbody>';
+    productos.forEach((p, i) => {
+        html += '<tr>'
+            + '<td data-label="#">' + (i + 1) + '</td>'
+            + '<td data-label="Producto">' + escapeHtml(p.nombre) + '</td>'
+            + '<td data-label="Cantidad Vendida">' + p.cantidad + '</td>'
+            + '<td data-label="Total">$' + formatoPrecio(p.total) + '</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Render: Ventas por cajero ---
+function renderReporteCajeros(cajeros) {
+    const container = document.getElementById('reporte-cajeros-container');
+    if (!cajeros.length) { setReporteVacio('reporte-cajeros-container'); return; }
+
+    let html = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>Cajero</th><th># Órdenes</th><th>Total</th>'
+        + '</tr></thead><tbody>';
+    cajeros.forEach(c => {
+        html += '<tr>'
+            + '<td data-label="Cajero"><strong>' + escapeHtml(c.usuario) + '</strong></td>'
+            + '<td data-label="# Órdenes">' + c.ordenes + '</td>'
+            + '<td data-label="Total">$' + formatoPrecio(c.total) + '</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Eventos del selector de fechas ---
+document.querySelectorAll('.btn-preset').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const preset = this.dataset.preset;
+        const rango = rangoPreset(preset);
+        document.getElementById('reporte-desde').value = rango.desde;
+        document.getElementById('reporte-hasta').value = rango.hasta;
+        marcarPreset(preset);
+        consultarReportes(rango.desde, rango.hasta);
+    });
+});
+
+document.getElementById('btn-consultar-reportes').addEventListener('click', function() {
+    marcarPreset(null); // limpia el preset activo si se usa rango personalizado
+    const desde = document.getElementById('reporte-desde').value;
+    const hasta = document.getElementById('reporte-hasta').value;
+    consultarReportes(desde, hasta);
+});
 
 // --- Preview de imagen al seleccionar archivo ---
 document.getElementById('producto-nuevo-imagen').addEventListener('change', function() {
