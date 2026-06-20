@@ -2,6 +2,8 @@
 // crear_orden.php — Endpoint JSON: crea una orden remota del cliente (con QR)
 header('Content-Type: application/json');
 
+// session_start() manual en vez de checkRole() porque este es un endpoint JSON.
+// checkRole() haría header('Location: login.php') y corrompería la respuesta JSON.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -81,18 +83,35 @@ try {
         $total += $subtotal;
         $detalles[] = [
             'producto_id' => $producto['id'],
+            'nombre' => $producto['nombre'],
             'cantidad' => $cantidad,
             'precio_unitario' => $producto['precio']
         ];
     }
 
-    // Generar código QR único
-    $codigo_qr = generarCodigoQR($pdo);
-
-    // Insertar cabecera de la orden
-    $stmt = $pdo->prepare("INSERT INTO ordenes (cliente_id, tipo_pedido, codigo_qr, total, estado, fecha_creacion) VALUES (?, 'remoto', ?, ?, 'pendiente', NOW())");
-    $stmt->execute([$_SESSION['usuario_id'], $codigo_qr, $total]);
-    $orden_id = $pdo->lastInsertId();
+    // Generar código QR único e insertar cabecera de la orden
+    // La generación usa SELECT previo (fast path) + catch de UNIQUE en INSERT (TOCTOU safety)
+    $maxQR = 5;
+    $orden_id = null;
+    $codigo_qr = null;
+    for ($qrAttempt = 0; $qrAttempt < $maxQR; $qrAttempt++) {
+        $codigo_qr = generarCodigoQR($pdo);
+        try {
+            $stmt = $pdo->prepare("INSERT INTO ordenes (cliente_id, tipo_pedido, codigo_qr, total, estado, fecha_creacion) VALUES (?, 'remoto', ?, ?, 'pendiente', NOW())");
+            $stmt->execute([$_SESSION['usuario_id'], $codigo_qr, $total]);
+            $orden_id = $pdo->lastInsertId();
+            break;
+        } catch (PDOException $e) {
+            // SQLSTATE 23000 = violación de integridad (código duplicado por inserción concurrente)
+            if (($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate')) && $qrAttempt < $maxQR - 1) {
+                continue;
+            }
+            throw $e;
+        }
+    }
+    if ($orden_id === null) {
+        throw new RuntimeException("No se pudo generar un código QR único.");
+    }
 
     // Insertar detalles y descontar stock de forma atómica
     $stmtDetalle = $pdo->prepare("INSERT INTO orden_detalles (orden_id, producto_id, cantidad, precio_unitario) VALUES (?, ?, ?, ?)");
@@ -105,7 +124,7 @@ try {
         if ($stmtStock->rowCount() === 0) {
             $pdo->rollBack();
             http_response_code(409);
-            echo json_encode(['success' => false, 'error' => 'Error al actualizar stock. Intenta de nuevo.']);
+            echo json_encode(['success' => false, 'error' => "{$detalle['nombre']} sin stock suficiente."]);
             exit;
         }
     }

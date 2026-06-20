@@ -465,6 +465,20 @@ body {
 .estado-entregado        { background: rgba(108, 117, 125, 0.15); color: var(--muted); }
 .estado-cancelada       { background: rgba(231, 76, 60, 0.15); color: var(--danger); }
 
+/* ---------- Sin resultados ---------- */
+.sin-resultados {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-dim);
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.sin-resultados i { font-size: 2.5rem; opacity: 0.4; }
+.sin-resultados p { font-size: 0.95rem; }
+
 /* ---------- Contenedor genérico ---------- */
 .page-container {
     max-width: 1100px;

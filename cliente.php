@@ -102,6 +102,10 @@ $nombre = $_SESSION['usuario_nombre'];
                 </div>
             </article>
         <?php endforeach; ?>
+        <div class="sin-resultados" id="sin-resultados">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <p>Sin resultados</p>
+        </div>
     </div>
 
     <button id="cart-toggle" class="cart-fab"><i class="fas fa-shopping-cart"></i> <span id="cart-count">0</span></button>
@@ -124,11 +128,6 @@ $nombre = $_SESSION['usuario_nombre'];
     </aside>
 
 <script>
-// Catálogo serializado desde PHP para el JS
-const CATALOGO = <?php echo json_encode(array_map(function($p) {
-    return ['id' => (int)$p['id'], 'nombre' => $p['nombre'], 'precio' => (float)$p['precio'], 'stock' => (int)$p['stock']];
-}, $productos)); ?>;
-
 // ---------- Estado del carrito en localStorage ----------
 let cart = JSON.parse(localStorage.getItem('flui_cart') || '[]');
 
@@ -221,11 +220,15 @@ function filtrarCatalogo() {
     const texto = document.getElementById('busqueda').value.trim().toLowerCase();
     const tabActiva = document.querySelector('.categoria-tabs button.active');
     const cat = tabActiva ? tabActiva.dataset.categoria : 'todas';
+    let algunoVisible = false;
     document.querySelectorAll('.producto-card').forEach(card => {
         const coincideTexto = texto === '' || card.dataset.nombre.includes(texto);
         const coincideCat = cat === 'todas' || card.dataset.categoria === cat;
-        card.style.display = (coincideTexto && coincideCat) ? '' : 'none';
+        const visible = coincideTexto && coincideCat;
+        card.style.display = visible ? '' : 'none';
+        if (visible) algunoVisible = true;
     });
+    document.getElementById('sin-resultados').style.display = algunoVisible ? 'none' : '';
 }
 
 async function confirmarPedido() {
@@ -275,7 +278,12 @@ document.getElementById('categoria-tabs').addEventListener('click', e => {
     e.target.classList.add('active');
     filtrarCatalogo();
 });
-document.getElementById('busqueda').addEventListener('input', filtrarCatalogo);
+// Búsqueda con debounce de 300ms
+let debounceTimer;
+document.getElementById('busqueda').addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(filtrarCatalogo, 300);
+});
 document.getElementById('cart-toggle').addEventListener('click', () => toggleCart(true));
 document.getElementById('cart-close').addEventListener('click', () => toggleCart(false));
 document.getElementById('cart-overlay').addEventListener('click', () => toggleCart(false));
@@ -300,6 +308,7 @@ document.getElementById('catalogo').addEventListener('click', e => {
 
 // Render inicial
 renderCart();
+filtrarCatalogo();
 </script>
 </body>
 </html>
