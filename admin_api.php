@@ -113,6 +113,12 @@ switch ($action) {
 // GET ?action=dashboard_stats — Estadísticas del día actual
 // -------------------------------------------------------
 function actionDashboardStats(PDO $pdo): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
     // 1. Total ventas y órdenes entregadas hoy
     $stmt = $pdo->query("
         SELECT COALESCE(SUM(total), 0) AS total_ventas,
@@ -594,6 +600,12 @@ function procesarImagen(array $archivo): array {
 
     if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
         return ['success' => false, 'error' => 'Solo se permiten imágenes JPEG o PNG.'];
+    }
+
+    // Verificación secundaria: ¿es realmente una imagen decodificable?
+    $imageInfo = @getimagesize($archivo['tmp_name']);
+    if ($imageInfo === false) {
+        return ['success' => false, 'error' => 'El archivo no es una imagen válida.'];
     }
 
     // Validar tamaño (2MB)
