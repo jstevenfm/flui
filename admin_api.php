@@ -365,24 +365,208 @@ function actionToggleCajero(PDO $pdo): void {
     }
 }
 
+// -------------------------------------------------------
+// GET ?action=listar_categorias — Lista de categorías con conteo de productos
+// -------------------------------------------------------
 function actionListarCategorias(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $stmt = $pdo->query("
+        SELECT c.id, c.nombre, c.descripcion,
+               COUNT(p.id) AS total_productos
+        FROM categorias c
+        LEFT JOIN productos p ON p.categoria_id = c.id
+        GROUP BY c.id
+        ORDER BY c.nombre ASC
+    ");
+    $categorias = $stmt->fetchAll();
+
+    // Normalizar tipos: total_productos viene como string desde MySQL
+    foreach ($categorias as &$cat) {
+        $cat['total_productos'] = (int)$cat['total_productos'];
+    }
+    unset($cat);
+
+    echo json_encode([
+        'success' => true,
+        'categorias' => $categorias,
+    ]);
 }
 
+// -------------------------------------------------------
+// POST ?action=crear_categoria — Crea una categoría nueva
+// Body JSON: { nombre, descripcion? }
+// -------------------------------------------------------
 function actionCrearCategoria(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $nombre = trim((string)($input['nombre'] ?? ''));
+    $descripcion = trim((string)($input['descripcion'] ?? ''));
+
+    if ($nombre === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El nombre de la categoría es obligatorio.']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            "INSERT INTO categorias (nombre, descripcion) VALUES (?, ?)"
+        );
+        $stmt->execute([$nombre, $descripcion]);
+        $id = (int)$pdo->lastInsertId();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Categoría creada.',
+            'id' => $id,
+        ]);
+    } catch (PDOException $e) {
+        // 1062 = violación de UNIQUE(nombre)
+        if ($e->getCode() == 23000 || (string)$e->errorInfo[1] === '1062') {
+            http_response_code(409);
+            echo json_encode(['success' => false, 'error' => 'Ya existe una categoría con ese nombre.']);
+            return;
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// POST ?action=editar_categoria — Edita una categoría existente
+// Body JSON: { id, nombre, descripcion? }
+// -------------------------------------------------------
 function actionEditarCategoria(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $id = (int)($input['id'] ?? 0);
+    $nombre = trim((string)($input['nombre'] ?? ''));
+    $descripcion = trim((string)($input['descripcion'] ?? ''));
+
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de categoría no válido.']);
+        return;
+    }
+    if ($nombre === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El nombre de la categoría es obligatorio.']);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            "UPDATE categorias SET nombre = ?, descripcion = ? WHERE id = ?"
+        );
+        $stmt->execute([$nombre, $descripcion, $id]);
+
+        // rowCount=0 puede significar "id no existe" o "datos idénticos".
+        // Para distinguir, verificamos existencia explícitamente.
+        if ($stmt->rowCount() === 0) {
+            $check = $pdo->prepare("SELECT COUNT(*) FROM categorias WHERE id = ?");
+            $check->execute([$id]);
+            if ((int)$check->fetchColumn() === 0) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'error' => 'Categoría no encontrada.']);
+                return;
+            }
+            // Existe y no cambió — tratamos como éxito (idempotente)
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Categoría actualizada.',
+        ]);
+    } catch (PDOException $e) {
+        if ($e->getCode() == 23000 || (string)($e->errorInfo[1] ?? '') === '1062') {
+            http_response_code(409);
+            echo json_encode(['success' => false, 'error' => 'Ya existe una categoría con ese nombre.']);
+            return;
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// POST ?action=eliminar_categoria — Elimina categoría con guard FK
+// Body JSON: { id }
+// Bloquea si tiene productos asociados (FK RESTRICT ya lo protege,
+// pero devolvemos 409 amigable antes del DELETE)
+// -------------------------------------------------------
 function actionEliminarCategoria(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $id = (int)($input['id'] ?? 0);
+
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de categoría no válido.']);
+        return;
+    }
+
+    // --- FK GUARD: contar productos asociados ---
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM productos WHERE categoria_id = ?");
+    $stmt->execute([$id]);
+    $totalProductos = (int)$stmt->fetchColumn();
+
+    if ($totalProductos > 0) {
+        http_response_code(409);
+        echo json_encode([
+            'success' => false,
+            'error' => 'La categoría tiene ' . $totalProductos . ' producto(s) asociado(s). No se puede eliminar.',
+        ]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM categorias WHERE id = ?");
+        $stmt->execute([$id]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Categoría no encontrada.']);
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Categoría eliminada.',
+        ]);
+    } catch (PDOException $e) {
+        // Doble safety net: si por race condition se agregó un producto,
+        // el FK RESTRICT lanza 23000 — lo traducimos al mismo 409 amigable.
+        if ($e->getCode() == 23000) {
+            http_response_code(409);
+            echo json_encode([
+                'success' => false,
+                'error' => 'La categoría tiene producto(s) asociado(s). No se puede eliminar.',
+            ]);
+            return;
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
 function actionListarProductos(PDO $pdo): void {

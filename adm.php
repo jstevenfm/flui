@@ -180,10 +180,71 @@ $nombre = $_SESSION['usuario_nombre'];
         <div class="pane-error hidden" id="categorias-error">
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span id="categorias-error-text"></span>
+            <button onclick="cargarCategorias()" class="btn-reintento"><i class="fa-solid fa-arrows-rotate"></i> Reintentar</button>
         </div>
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-tags"></i>
-            <p>Gestión de categorías — próximamente</p>
+
+        <div class="pane-head">
+            <h2 class="section-title"><i class="fa-solid fa-tags"></i> Gestionar Categorías</h2>
+            <button class="btn-primary" onclick="abrirModalCrearCategoria()">
+                <i class="fa-solid fa-plus"></i> Nueva Categoría
+            </button>
+        </div>
+
+        <div class="table-responsive" id="categorias-container">
+            <div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear categoría -->
+    <div class="modal-overlay" id="modal-crear-categoria">
+        <div class="modal-content">
+            <button class="modal-close" onclick="cerrarModal('modal-crear-categoria')">&times;</button>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-tag"></i> Nueva Categoría</h3>
+            </div>
+            <div class="modal-body">
+                <form id="form-crear-categoria" onsubmit="guardarCategoria(event)">
+                    <div class="form-group">
+                        <label for="categoria-nueva-nombre">Nombre</label>
+                        <input type="text" id="categoria-nueva-nombre" name="nombre" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="categoria-nueva-descripcion">Descripción (opcional)</label>
+                        <textarea id="categoria-nueva-descripcion" name="descripcion" class="form-textarea" maxlength="500" placeholder="Breve descripción de la categoría..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModal('modal-crear-categoria')">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Crear</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar categoría -->
+    <div class="modal-overlay" id="modal-editar-categoria">
+        <div class="modal-content">
+            <button class="modal-close" onclick="cerrarModal('modal-editar-categoria')">&times;</button>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-tag"></i> Editar Categoría</h3>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-categoria" onsubmit="actualizarCategoria(event)">
+                    <input type="hidden" id="categoria-editar-id" name="id">
+                    <div class="form-group">
+                        <label for="categoria-editar-nombre">Nombre</label>
+                        <input type="text" id="categoria-editar-nombre" name="nombre" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="categoria-editar-descripcion">Descripción (opcional)</label>
+                        <textarea id="categoria-editar-descripcion" name="descripcion" class="form-textarea" maxlength="500" placeholder="Breve descripción de la categoría..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModal('modal-editar-categoria')">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -280,6 +341,7 @@ function activarTab(tabName) {
         switch (tabName) {
             case 'dashboard': cargarDashboard(); break;
             case 'cajeros': cargarCajeros(); break;
+            case 'categorias': cargarCategorias(); break;
             // Other tabs will load in future slices
         }
     }
@@ -598,6 +660,200 @@ async function toggleCajero(id, nuevoActivo) {
 
         mostrarToast('exito', 'Estado actualizado.');
         cargarCajeros();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// =========================================================
+// Categorías CRUD (Slice 3)
+// =========================================================
+
+// Cache en memoria de las categorías cargadas (para botones de acción)
+let categoriasCache = [];
+
+// --- Cargar lista de categorías ---
+async function cargarCategorias() {
+    const container = document.getElementById('categorias-container');
+    const errorBox = document.getElementById('categorias-error');
+    const errorText = document.getElementById('categorias-error-text');
+    errorBox.classList.add('hidden');
+    container.innerHTML = '<div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+
+    try {
+        const resp = await fetch('admin_api.php?action=listar_categorias');
+        const data = await resp.json();
+
+        if (!data.success) {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = 'login.php';
+                return;
+            }
+            throw new Error(data.error || data.message || 'Error al cargar categorías.');
+        }
+
+        categoriasCache = data.categorias || [];
+        renderTablaCategorias(categoriasCache);
+    } catch (e) {
+        errorText.textContent = e.message || 'Error de conexión.';
+        errorBox.classList.remove('hidden');
+        container.innerHTML = '';
+    }
+}
+
+// --- Renderizar tabla de categorías ---
+function renderTablaCategorias(categorias) {
+    const container = document.getElementById('categorias-container');
+
+    if (!categorias || categorias.length === 0) {
+        container.innerHTML =
+            '<table class="admin-table"><thead><tr>'
+            + '<th>Nombre</th><th>Descripción</th><th>Productos</th><th>Acciones</th>'
+            + '</tr></thead><tbody>'
+            + '<tr><td colspan="4" class="empty-state"><i class="fa-solid fa-tags"></i><p>No hay categorías registradas.</p></td></tr>'
+            + '</tbody></table>';
+        return;
+    }
+
+    let html = '<table class="admin-table"><thead><tr>'
+        + '<th>Nombre</th><th>Descripción</th><th>Productos</th><th>Acciones</th>'
+        + '</tr></thead><tbody>';
+
+    categorias.forEach(c => {
+        const total = parseInt(c.total_productos || 0, 10);
+        const countBadge = '<span class="product-count' + (total > 0 ? ' product-count-active' : '') + '">' + total + '</span>';
+        const desc = c.descripcion ? escapeHtml(c.descripcion) : '<span class="text-muted">—</span>';
+
+        html += '<tr>'
+            + '<td data-label="Nombre"><strong>' + escapeHtml(c.nombre) + '</strong></td>'
+            + '<td data-label="Descripción">' + desc + '</td>'
+            + '<td data-label="Productos">' + countBadge + '</td>'
+            + '<td data-label="Acciones" class="acciones-cell">'
+            +   '<button class="btn-icon btn-secondary" onclick="abrirModalEditarCategoria(' + c.id + ')">'
+            +     '<i class="fa-solid fa-pen"></i> Editar'
+            +   '</button>'
+            +   '<button class="btn-icon btn-danger" onclick="eliminarCategoria(' + c.id + ')">'
+            +     '<i class="fa-solid fa-trash"></i> Eliminar'
+            +   '</button>'
+            + '</td>'
+            + '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Abrir modal crear categoría ---
+function abrirModalCrearCategoria() {
+    document.getElementById('form-crear-categoria').reset();
+    abrirModal('modal-crear-categoria');
+}
+
+// --- Guardar (crear) categoría ---
+async function guardarCategoria(event) {
+    event.preventDefault();
+    const nombre = document.getElementById('categoria-nueva-nombre').value.trim();
+    const descripcion = document.getElementById('categoria-nueva-descripcion').value.trim();
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=crear_categoria', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombre, descripcion })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo crear la categoría.');
+            return;
+        }
+
+        mostrarToast('exito', 'Categoría creada exitosamente.');
+        cerrarModal('modal-crear-categoria');
+        cargarCategorias();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Abrir modal editar categoría ---
+function abrirModalEditarCategoria(id) {
+    const cat = categoriasCache.find(c => c.id == id);
+    if (!cat) {
+        mostrarToast('error', 'Categoría no encontrada.');
+        return;
+    }
+    document.getElementById('categoria-editar-id').value = cat.id;
+    document.getElementById('categoria-editar-nombre').value = cat.nombre || '';
+    document.getElementById('categoria-editar-descripcion').value = cat.descripcion || '';
+    abrirModal('modal-editar-categoria');
+}
+
+// --- Actualizar (editar) categoría ---
+async function actualizarCategoria(event) {
+    event.preventDefault();
+    const id = parseInt(document.getElementById('categoria-editar-id').value, 10);
+    const nombre = document.getElementById('categoria-editar-nombre').value.trim();
+    const descripcion = document.getElementById('categoria-editar-descripcion').value.trim();
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=editar_categoria', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, nombre, descripcion })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo actualizar la categoría.');
+            return;
+        }
+
+        mostrarToast('exito', 'Categoría actualizada exitosamente.');
+        cerrarModal('modal-editar-categoria');
+        cargarCategorias();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Eliminar categoría ---
+async function eliminarCategoria(id) {
+    const cat = categoriasCache.find(c => c.id == id);
+    const nombreCat = cat ? cat.nombre : '';
+    if (!confirm('¿Eliminar la categoría "' + nombreCat + '"?\nSi tiene productos asociados no se podrá eliminar.')) return;
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=eliminar_categoria', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: parseInt(id, 10) })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            // 409 con productos asociados — el mensaje ya incluye el conteo
+            mostrarToast('error', data.error || 'No se pudo eliminar la categoría.');
+            return;
+        }
+
+        mostrarToast('exito', 'Categoría eliminada.');
+        cargarCategorias();
     } catch (e) {
         mostrarToast('error', 'Error de conexión.');
     }
