@@ -11,7 +11,9 @@ CREATE TABLE usuarios (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     rol ENUM('cliente', 'cajero', 'admin') NOT NULL DEFAULT 'cliente',
-    activo BOOLEAN DEFAULT TRUE
+    activo BOOLEAN DEFAULT TRUE,
+    reset_token VARCHAR(64) NULL,
+    reset_token_expires DATETIME NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 1. Categorías de productos
@@ -103,3 +105,11 @@ INSERT INTO productos (categoria_id, nombre, precio, stock, imagen) VALUES
 INSERT IGNORE INTO usuarios (usuario, email, password, rol, activo) VALUES
     ('Administrador', 'admin@flui.com', '$2y$12$oRj2MULCq427t3Sr5rsL6.fKyO6LVuC/fXAC93L64huDcDAmB3OLG', 'admin', TRUE),
     ('Cajero Demo', 'cajero@flui.com', '$2y$12$KGd6LZK50QzUX.mPKx65euBMO8C2UPcAkJbh/Dg9Sl0PNoq1B5Ikm', 'cajero', TRUE);
+
+-- ============================================================
+-- MIGRACIÓN — Para instalaciones existentes (ejecutar manualmente)
+-- Agrega columnas de recuperación de contraseña a la tabla usuarios
+-- ============================================================
+ALTER TABLE usuarios
+    ADD COLUMN reset_token VARCHAR(64) NULL,
+    ADD COLUMN reset_token_expires DATETIME NULL;
