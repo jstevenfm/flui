@@ -1,380 +1,330 @@
 <?php
 // adm.php — Panel de administración (solo admin)
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
 checkRole('admin');
-require 'conexion.php';
-
-$mensaje_cajero = '';
-
-// Procesar formularios de gestión de cajeros
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $accion = $_POST['accion'] ?? '';
-
-    if ($accion === 'crear') {
-        $usuario_cajero = trim($_POST['usuario'] ?? '');
-        $email_cajero = strtolower(trim($_POST['email'] ?? ''));
-        $password_cajero = $_POST['password'] ?? '';
-
-        if (empty($usuario_cajero) || empty($email_cajero) || empty($password_cajero)) {
-            $mensaje_cajero = "<div class='alert alert-danger'>Por favor, rellena todos los campos.</div>";
-        } elseif (strlen($password_cajero) < 6) {
-            $mensaje_cajero = "<div class='alert alert-danger'>La contraseña debe tener al menos 6 caracteres.</div>";
-        } else {
-            $password_hash = password_hash($password_cajero, PASSWORD_BCRYPT);
-            try {
-                $stmt = $pdo->prepare("INSERT INTO usuarios (usuario, email, password, rol) VALUES (?, ?, ?, 'cajero')");
-                $stmt->execute([$usuario_cajero, $email_cajero, $password_hash]);
-                $mensaje_cajero = "<div class='alert alert-success'>Cajero creado exitosamente.</div>";
-            } catch (\PDOException $e) {
-                if ($e->getCode() == 23000) {
-                    $mensaje_cajero = "<div class='alert alert-danger'>El correo electrónico ya está registrado.</div>";
-                } else {
-                    $mensaje_cajero = "<div class='alert alert-danger'>Error al crear el cajero. Intente más tarde.</div>";
-                }
-            }
-        }
-    } elseif ($accion === 'desactivar') {
-        $id_cajero = (int)($_POST['id_cajero'] ?? 0);
-        if ($id_cajero > 0) {
-            $stmt = $pdo->prepare("UPDATE usuarios SET activo = 0 WHERE id = ? AND rol = 'cajero'");
-            $stmt->execute([$id_cajero]);
-            $mensaje_cajero = "<div class='alert alert-success'>Cajero desactivado exitosamente.</div>";
-        }
-    }
-}
-
-// Obtener lista de cajeros
-$cajeros = $pdo->query("SELECT id, usuario, email, activo FROM usuarios WHERE rol = 'cajero' ORDER BY id DESC")->fetchAll();
+$nombre = $_SESSION['usuario_nombre'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flui POS - Dashboard</title>
+    <title>Flui POS - Admin</title>
     <link rel="stylesheet" href="adm.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .alert { padding: 10px 15px; margin-bottom: 15px; border-radius: 8px; font-size: 14px; }
-        .alert-danger { background: #f8d7da; color: #721c24; }
-        .alert-success { background: #d4edda; color: #155724; }
-        .cajero-section { background: var(--bg-card); border-radius: 20px; padding: 20px; margin-bottom: 30px; border: 1px solid var(--border); }
-        .cajero-section h3 { margin-bottom: 15px; }
-        .cajero-form { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; align-items: flex-end; }
-        .cajero-form .field { display: flex; flex-direction: column; gap: 5px; }
-        .cajero-form .field label { color: var(--text-dim); font-size: 0.8rem; }
-        .cajero-form .field input { background: var(--bg-dark); border: 1px solid var(--border); color: white; padding: 10px; border-radius: 8px; font-size: 0.9rem; width: 200px; }
-        .btn-crear { background: var(--accent); color: black; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .btn-desactivar { background: #e74c3c; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; }
-        .btn-desactivar:hover { background: #c0392b; }
-        .estado-activo { color: var(--accent); font-size: 0.85rem; }
-        .estado-inactivo { color: #e74c3c; font-size: 0.85rem; }
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <div class="app-layout">
-        <aside class="sidebar">
-            <div class="logo">
-                <div class="logo-icon"><i class="fa-solid fa-cash-register"></i></div>
-                <div>
-                    <h3>Flui POS</h3>
-                    <p>Admin Dashboard</p>
-                </div>
+    <!-- Header -->
+    <header class="admin-header">
+        <div class="admin-brand">
+            <span class="brand-icon"><i class="fa-solid fa-cash-register"></i></span>
+            <h1>Flui</h1>
+        </div>
+        <div class="admin-user">
+            <span>Hola, <strong><?php echo htmlspecialchars($nombre); ?></strong></span>
+            <a href="logout.php"><i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión</a>
+        </div>
+    </header>
+
+    <!-- Tab bar -->
+    <nav class="admin-tabs">
+        <button class="admin-tab active" data-tab="dashboard">
+            <i class="fa-solid fa-chart-line"></i> Dashboard
+        </button>
+        <button class="admin-tab" data-tab="cajeros">
+            <i class="fa-solid fa-users"></i> Cajeros
+        </button>
+        <button class="admin-tab" data-tab="categorias">
+            <i class="fa-solid fa-tags"></i> Categorías
+        </button>
+        <button class="admin-tab" data-tab="productos">
+            <i class="fa-solid fa-box"></i> Productos
+        </button>
+        <button class="admin-tab" data-tab="reportes">
+            <i class="fa-solid fa-file-invoice"></i> Reportes
+        </button>
+        <button class="admin-tab" data-tab="escanear">
+            <i class="fa-solid fa-qrcode"></i> Escanear QR
+        </button>
+    </nav>
+
+    <!-- Pane: Dashboard -->
+    <div class="admin-pane active" id="pane-dashboard">
+        <div class="pane-error hidden" id="dashboard-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="dashboard-error-text"></span>
+            <button onclick="cargarDashboard()" class="btn-reintento"><i class="fa-solid fa-arrows-rotate"></i> Reintentar</button>
+        </div>
+
+        <!-- Stats cards -->
+        <div class="stats-grid" id="dashboard-stats">
+            <div class="stat-card">
+                <div class="card-icon-wrap"><i class="fa-solid fa-wallet"></i></div>
+                <p class="stat-label">Ventas Hoy</p>
+                <h3 class="stat-value" id="stat-ventas">$0</h3>
             </div>
-            <nav class="side-nav">
-                <a href="#" class="active"><i class="fa-solid fa-table-cells-large"></i> Dashboard</a>
-                <a href="#"><i class="fa-solid fa-receipt"></i> Transactions</a>
-                <a href="#"><i class="fa-solid fa-cart-shopping"></i> Orders</a>
-                <a href="#cajeros"><i class="fa-solid fa-users"></i> Cajeros</a>
-                <a href="#"><i class="fa-solid fa-box"></i> Inventory</a>
-                <a href="#"><i class="fa-solid fa-chart-line"></i> Reports</a>
-            </nav>
-            <div class="sidebar-footer">
-                <a href="#"><i class="fa-solid fa-gear"></i> Settings</a>
-                <a href="logout.php"><i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión</a>
-                <div class="user-profile">
-                    <img src="https://via.placeholder.com/35" alt="User">
-                    <div>
-                        <h4>Alex Chen</h4>
-                        <p>Store Manager</p>
-                    </div>
-                </div>
+            <div class="stat-card">
+                <div class="card-icon-wrap"><i class="fa-solid fa-receipt"></i></div>
+                <p class="stat-label">Órdenes Hoy</p>
+                <h3 class="stat-value" id="stat-ordenes">0</h3>
             </div>
-        </aside>
-
-        <main class="main-content">
-            <header class="top-header">
-                <div class="header-search">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" placeholder="Search data...">
-                </div>
-                <div class="header-actions">
-                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
-                    <button class="icon-btn"><i class="fa-regular fa-calendar"></i></button>
-                    <div class="mobile-avatar">
-                        <img src="https://via.placeholder.com/35" alt="User">
-                    </div>
-                </div>
-            </header>
-
-            <section class="content-body">
-                <div class="welcome-row">
-                    <h2>Dashboard Overview</h2>
-                    <div class="action-buttons">
-                        <button class="btn-secondary">Export CSV</button>
-                        <button class="btn-primary">New Order</button>
-                    </div>
-                </div>
-
-                <!-- Sección: Gestionar Cajeros -->
-                <div class="cajero-section" id="cajeros">
-                    <h3><i class="fa-solid fa-users" style="color: var(--accent);"></i> Gestionar Cajeros</h3>
-                    <?php echo $mensaje_cajero; ?>
-                    <form method="POST" class="cajero-form">
-                        <input type="hidden" name="accion" value="crear">
-                        <div class="field">
-                            <label>Nombre de usuario</label>
-                            <input type="text" name="usuario" placeholder="Ej: cajero1" required>
-                        </div>
-                        <div class="field">
-                            <label>Correo electrónico</label>
-                            <input type="email" name="email" placeholder="cajero@flui.com" required>
-                        </div>
-                        <div class="field">
-                            <label>Contraseña</label>
-                            <input type="password" name="password" placeholder="Mínimo 6 caracteres" required minlength="6">
-                        </div>
-                        <button type="submit" class="btn-crear"><i class="fa-solid fa-plus"></i> Crear Cajero</button>
-                    </form>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>USUARIO</th>
-                                    <th>CORREO</th>
-                                    <th>ESTADO</th>
-                                    <th>ACCIÓN</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($cajeros)): ?>
-                                <tr><td colspan="5" style="text-align:center;color:var(--text-dim);">No hay cajeros registrados.</td></tr>
-                                <?php else: ?>
-                                <?php foreach ($cajeros as $c): ?>
-                                <tr>
-                                    <td>#<?php echo $c['id']; ?></td>
-                                    <td><?php echo htmlspecialchars($c['usuario']); ?></td>
-                                    <td><?php echo htmlspecialchars($c['email']); ?></td>
-                                    <td>
-                                        <?php if ($c['activo']): ?>
-                                        <span class="estado-activo">Activo</span>
-                                        <?php else: ?>
-                                        <span class="estado-inactivo">Inactivo</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <?php if ($c['activo']): ?>
-                                        <form method="POST" style="display:inline;" onsubmit="return confirm('¿Desactivar este cajero?');">
-                                            <input type="hidden" name="accion" value="desactivar">
-                                            <input type="hidden" name="id_cajero" value="<?php echo $c['id']; ?>">
-                                            <button type="submit" class="btn-desactivar">Desactivar</button>
-                                        </form>
-                                        <?php else: ?>
-                                        <span style="color:var(--text-dim);font-size:0.8rem;">—</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="card-top">
-                            <span class="card-icon green-bg"><i class="fa-solid fa-wallet"></i></span>
-                            <span class="trend positive">↗ 12.5%</span>
-                        </div>
-                        <p>Total Revenue</p>
-                        <h3>$42,500.00</h3>
-                    </div>
-                    <div class="stat-card">
-                        <div class="card-top">
-                            <span class="card-icon blue-bg"><i class="fa-solid fa-file-invoice"></i></span>
-                            <span class="trend negative">↘ 2.4%</span>
-                        </div>
-                        <p>Transactions</p>
-                        <h3>1,284</h3>
-                    </div>
-                    <div class="stat-card">
-                        <div class="card-top">
-                            <span class="card-icon orange-bg"><i class="fa-solid fa-tag"></i></span>
-                            <span class="trend positive">↗ 5.1%</span>
-                        </div>
-                        <p>Avg Ticket</p>
-                        <h3>$33.10</h3>
-                    </div>
-                    <div class="stat-card">
-                        <div class="card-top">
-                            <span class="card-icon purple-bg"><i class="fa-solid fa-user-group"></i></span>
-                            <span class="trend neutral">0%</span>
-                        </div>
-                        <p>Staff Active</p>
-                        <h3>12</h3>
-                    </div>
-                </div>
-
-                <div class="orders-container">
-                    <div class="orders-header">
-                        <h3>Recent Orders</h3>
-                        <a href="#">View All</a>
-                    </div>
-                    <div class="table-responsive">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ORDER ID</th>
-                                    <th>CUSTOMER</th>
-                                    <th>TIME</th>
-                                    <th>AMOUNT</th>
-                                    <th>STATUS</th>
-                                    <th>ACTION</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>#ORD-7721</td>
-                                    <td>James Smith</td>
-                                    <td>10:45 AM</td>
-                                    <td>$54.20</td>
-                                    <td><span class="status completed">Completed</span></td>
-                                    <td><i class="fa-solid fa-ellipsis-vertical"></i></td>
-                                </tr>
-                                </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-        </main>
-
-        <nav class="mobile-nav">
-            <a href="#" class="active"><i class="fa-solid fa-house"></i></a>
-            <a href="#"><i class="fa-solid fa-clock-rotate-left"></i></a>
-            <a href="#"><i class="fa-solid fa-box-archive"></i></a>
-            <a href="#"><i class="fa-solid fa-ellipsis"></i></a>
-        </nav>
-    </div>
-<div id="new-order-modal" class="modal-overlay">
-    <div class="modal-container">
-        
-        <header class="modal-header">
-            <div class="modal-title">
-                <i class="fa-solid fa-cart-plus"></i>
-                <div>
-                    <h3>Nueva Orden</h3>
-                    <p id="order-type-label">Modo: Venta Rápida</p>
-                </div>
+            <div class="stat-card">
+                <div class="card-icon-wrap"><i class="fa-solid fa-clock"></i></div>
+                <p class="stat-label">Pendientes</p>
+                <h3 class="stat-value" id="stat-pendientes">0</h3>
             </div>
-            <button class="close-modal-btn" id="close-order-modal">&times;</button>
-        </header>
+        </div>
 
-        <div class="modal-body">
-            
-            <div class="catalog-column">
-                <div class="search-box">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text" id="product-search" placeholder="Buscar producto por nombre o código...">
-                </div>
-                
-                <div class="products-grid" id="products-grid">
-                    <div class="product-item" data-id="1">
-                        <div class="product-info">
-                            <h4>Hamburguesa Flui Double</h4>
-                            <span class="product-stock">Stock: 50 u.</span>
-                        </div>
-                        <div class="product-footer">
-                            <span class="product-price">$12.50</span>
-                            <button class="add-product-btn"><i class="fa-solid fa-plus"></i></button>
-                        </div>
-                    </div>
-                    <div class="product-item" data-id="2">
-                        <div class="product-info">
-                            <h4>Papas Fritas Medianas</h4>
-                            <span class="product-stock">Stock: 100 u.</span>
-                        </div>
-                        <div class="product-footer">
-                            <span class="product-price">$4.00</span>
-                            <button class="add-product-btn"><i class="fa-solid fa-plus"></i></button>
-                        </div>
-                    </div>
-                </div>
+        <!-- Top products -->
+        <div class="dashboard-section">
+            <h2 class="section-title"><i class="fa-solid fa-trophy"></i> Top 5 Productos Hoy</h2>
+            <div id="top-productos-container">
+                <div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>
             </div>
+        </div>
 
-            <div class="cart-column">
-                <h4>Resumen del Pedido</h4>
-                
-                <div class="cart-items-container" id="cart-items-container">
-                    <div class="empty-cart-notice">
-                        <i class="fa-solid fa-basket-shopping"></i>
-                        <p>El carrito está vacío</p>
-                    </div>
-                </div>
-
-                <div class="cart-summary">
-                    <div class="summary-row">
-                        <span>Subtotal</span>
-                        <span id="summary-subtotal">$0.00</span>
-                    </div>
-                    <div class="summary-row total">
-                        <span>Total</span>
-                        <span id="summary-total">$0.00</span>
-                    </div>
-                    <button class="btn-checkout" id="btn-submit-order">
-                        <i class="fa-solid fa-cash-register"></i> Completar Venta
-                    </button>
-                </div>
+        <!-- Recent orders -->
+        <div class="dashboard-section">
+            <h2 class="section-title"><i class="fa-solid fa-list"></i> Últimas Órdenes</h2>
+            <div class="table-responsive" id="ordenes-recientes-container">
+                <div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>
             </div>
-
         </div>
     </div>
-</div>
+
+    <!-- Pane: Cajeros -->
+    <div class="admin-pane" id="pane-cajeros">
+        <div class="pane-error hidden" id="cajeros-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="cajeros-error-text"></span>
+            <button onclick="cargarCajeros()" class="btn-reintento"><i class="fa-solid fa-arrows-rotate"></i> Reintentar</button>
+        </div>
+        <div class="tab-placeholder">
+            <i class="fa-solid fa-users"></i>
+            <p>Gestión de cajeros — próximamente</p>
+        </div>
+    </div>
+
+    <!-- Pane: Categorías -->
+    <div class="admin-pane" id="pane-categorias">
+        <div class="pane-error hidden" id="categorias-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="categorias-error-text"></span>
+        </div>
+        <div class="tab-placeholder">
+            <i class="fa-solid fa-tags"></i>
+            <p>Gestión de categorías — próximamente</p>
+        </div>
+    </div>
+
+    <!-- Pane: Productos -->
+    <div class="admin-pane" id="pane-productos">
+        <div class="pane-error hidden" id="productos-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="productos-error-text"></span>
+        </div>
+        <div class="tab-placeholder">
+            <i class="fa-solid fa-box"></i>
+            <p>Gestión de productos — próximamente</p>
+        </div>
+    </div>
+
+    <!-- Pane: Reportes -->
+    <div class="admin-pane" id="pane-reportes">
+        <div class="pane-error hidden" id="reportes-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="reportes-error-text"></span>
+        </div>
+        <div class="tab-placeholder">
+            <i class="fa-solid fa-file-invoice"></i>
+            <p>Reportes de ventas — próximamente</p>
+        </div>
+    </div>
+
+    <!-- Pane: Escanear QR -->
+    <div class="admin-pane" id="pane-escanear">
+        <div class="pane-error hidden" id="escanear-error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="escanear-error-text"></span>
+        </div>
+        <div class="tab-placeholder">
+            <i class="fa-solid fa-qrcode"></i>
+            <p>Escáner QR — próximamente</p>
+        </div>
+    </div>
+
+    <!-- Toast container for notifications -->
+    <div id="toast-container"></div>
 
 <script>
-    // Seleccionar los elementos del DOM
-    const openModalBtn = document.querySelector('.btn-primary'); // Tu botón "New Order"
-    const closeModalBtn = document.getElementById('close-order-modal');
-    const modalOverlay = document.getElementById('new-order-modal');
+// Debug: admin session
+console.log('Admin:', <?php echo json_encode($nombre); ?>);
 
-    // Función para abrir el modal
-    if (openModalBtn && modalOverlay) {
-        openModalBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            modalOverlay.classList.add('active');
-        });
+// === Utilidades ===
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function formatoPrecio(n) {
+    return Number(n).toLocaleString('es-CO');
+}
+
+function mostrarToast(tipo, mensaje) {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = 'toast toast-' + tipo;
+    toast.innerHTML = '<i class="fa-solid ' + (tipo === 'exito' ? 'fa-circle-check' : 'fa-circle-xmark') + '"></i> ' + escapeHtml(mensaje);
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('toast-fade-out');
+        setTimeout(() => toast.remove(), 400);
+    }, 3000);
+}
+
+// === Tab switching with hash persistence + lazy load ===
+const paneLoaded = {
+    dashboard: false,
+    cajeros: false,
+    categorias: false,
+    productos: false,
+    reportes: false,
+    escanear: false
+};
+
+function activarTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
+
+    const tabBtn = document.querySelector('.admin-tab[data-tab="' + tabName + '"]');
+    const pane = document.getElementById('pane-' + tabName);
+
+    if (tabBtn) tabBtn.classList.add('active');
+    if (pane) pane.classList.add('active');
+
+    // Lazy load
+    if (!paneLoaded[tabName]) {
+        paneLoaded[tabName] = true;
+        switch (tabName) {
+            case 'dashboard': cargarDashboard(); break;
+            case 'cajeros': cargarCajeros(); break;
+            // Other tabs will load in future slices
+        }
     }
+}
 
-    // Función para cerrar el modal con la "X"
-    if (closeModalBtn && modalOverlay) {
-        closeModalBtn.addEventListener('click', () => {
-            modalOverlay.classList.remove('active');
-        });
+// Click handler
+document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        const tabName = this.dataset.tab;
+        window.location.hash = tabName;
+        activarTab(tabName);
+    });
+});
+
+// Hash persistence on load
+const hashTab = window.location.hash.replace('#', '');
+if (hashTab && paneLoaded.hasOwnProperty(hashTab)) {
+    activarTab(hashTab);
+} else {
+    activarTab('dashboard');
+    paneLoaded.dashboard = true;
+    cargarDashboard();
+}
+
+// Hash change handler
+window.addEventListener('hashchange', () => {
+    const h = window.location.hash.replace('#', '');
+    if (h && paneLoaded.hasOwnProperty(h)) {
+        activarTab(h);
     }
+});
 
-    // Función para cerrar el modal si se hace clic en el fondo oscurecido
-    if (modalOverlay) {
-        modalOverlay.addEventListener('click', (e) => {
-            // Si el clic fue en el fondo (.modal-overlay) y no dentro de la tarjeta
-            if (e.target === modalOverlay) {
-                modalOverlay.classList.remove('active');
+// === Dashboard: cargar estadísticas ===
+async function cargarDashboard() {
+    const errorBox = document.getElementById('dashboard-error');
+    const errorText = document.getElementById('dashboard-error-text');
+    errorBox.classList.add('hidden');
+
+    try {
+        const resp = await fetch('admin_api.php?action=dashboard_stats');
+        const data = await resp.json();
+
+        if (!data.success) {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = 'login.php';
+                return;
             }
-        });
+            throw new Error(data.error || data.message || 'Error al cargar estadísticas.');
+        }
+
+        // Fill stat cards
+        document.getElementById('stat-ventas').textContent = '$' + formatoPrecio(data.ventas_hoy);
+        document.getElementById('stat-ordenes').textContent = data.ordenes_hoy;
+        document.getElementById('stat-pendientes').textContent = data.pendientes;
+
+        // Top products
+        const topContainer = document.getElementById('top-productos-container');
+        if (data.top_productos && data.top_productos.length > 0) {
+            let html = '<table class="admin-table"><thead><tr><th>Producto</th><th>Cantidad</th></tr></thead><tbody>';
+            data.top_productos.forEach(p => {
+                html += '<tr><td>' + escapeHtml(p.nombre) + '</td><td>' + p.cantidad + '</td></tr>';
+            });
+            html += '</tbody></table>';
+            topContainer.innerHTML = html;
+        } else {
+            topContainer.innerHTML = '<div class="empty-state"><i class="fa-solid fa-chart-simple"></i><p>Sin datos disponibles</p></div>';
+        }
+
+        // Recent orders
+        const ordenesContainer = document.getElementById('ordenes-recientes-container');
+        if (data.ordenes_recientes && data.ordenes_recientes.length > 0) {
+            const estadoLabel = {
+                pendiente: 'Pendiente',
+                en_preparacion: 'En preparación',
+                listo: 'Listo',
+                entregado: 'Entregado',
+                cancelada: 'Cancelada'
+            };
+            let html = '<table class="admin-table"><thead><tr><th>#</th><th>Cliente</th><th>Hora</th><th>Total</th><th>Estado</th></tr></thead><tbody>';
+            data.ordenes_recientes.forEach(o => {
+                const cliente = o.tipo_pedido === 'venta_rapida' ? 'Venta rápida' : (o.cliente_nombre || '—');
+                let fechaStr = '';
+                try {
+                    const f = new Date(o.fecha_creacion + (o.fecha_creacion.indexOf('Z') === -1 ? 'Z' : ''));
+                    fechaStr = f.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+                } catch (e) { fechaStr = o.fecha_creacion; }
+
+                const label = estadoLabel[o.estado] || o.estado;
+                html += '<tr>'
+                    + '<td>#' + o.id + '</td>'
+                    + '<td>' + escapeHtml(cliente) + '</td>'
+                    + '<td>' + escapeHtml(fechaStr) + '</td>'
+                    + '<td>$' + formatoPrecio(o.total) + '</td>'
+                    + '<td><span class="estado-badge estado-' + o.estado + '">' + label + '</span></td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table>';
+            ordenesContainer.innerHTML = html;
+        } else {
+            ordenesContainer.innerHTML = '<div class="empty-state"><i class="fa-solid fa-inbox"></i><p>Sin órdenes recientes</p></div>';
+        }
+
+    } catch (e) {
+        errorText.textContent = e.message || 'Error de conexión.';
+        errorBox.classList.remove('hidden');
     }
+}
+
+// === Cajeros: placeholder (implements in Slice 2) ===
+function cargarCajeros() {
+    // Will be implemented in Slice 2
+}
 </script>
 
 </body>
-
 </html>
