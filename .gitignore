@@ -1,0 +1,32 @@
+# Dependencias
+vendor/
+node_modules/
+
+# Archivos de entorno
+.env
+.env.*
+!.env.example
+
+# Uploads de usuarios (imágenes de productos)
+img/*
+!img/.htaccess
+
+# Entorno de desarrollo
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+error_log
+
+# Configuración local (si se crea un override)
+conexion.local.php
+
+# Archivos generados
+*.tmp
+*.bak

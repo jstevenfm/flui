@@ -13,60 +13,62 @@ Repo: `https://github.com/jstevenfm/flui.git` — branch `main`.
 Requires PHP 8+, MySQL, and a web server (Apache/Nginx) serving from `/project/` (the URLs assume `http://localhost/project/`).
 
 1. Create a MySQL database named `sistema_usuarios` (or override via env vars).
-2. Run `bd.sql` for base tables — BUT see "Gotchas" below.
-3. The `usuarios` table is NOT in `bd.sql`. It must already exist or be created manually. Expected schema (inferred from `signup.php` and `login.php`):
-   ```sql
-   CREATE TABLE usuarios (
-       id INT AUTO_INCREMENT PRIMARY KEY,
-       usuario VARCHAR(100) NOT NULL,
-       email VARCHAR(255) NOT NULL UNIQUE,
-       password VARCHAR(255) NOT NULL,
-       rol ENUM('cliente', 'admin') NOT NULL DEFAULT 'cliente'
-   );
-   ```
-4. `conexion.php` reads `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS` from `$_ENV`. Falls back to `localhost` / `root` / empty password. No `.env` file mechanism — use web server env or edit defaults directly.
-5. There is no `.gitignore`, no Docker setup, no migration system.
+2. Run `bd.sql` for schema completo (5 tablas: usuarios, categorias, productos, ordenes, orden_detalles + datos semilla de cafetería).
+3. `conexion.php` reads `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS` from `$_ENV`. Falls back to `localhost` / `root` / empty password. No `.env` file mechanism — use web server env or edit defaults directly.
+4. Crear directorio `img/` con permisos de escritura para uploads de productos (el `.htaccess` ya está incluido).
+5. El `.gitignore` excluye `img/*` (uploads) pero conserva `img/.htaccess`.
 
 ## File map and routing flow
 
 ```
-index.html       — Landing / marketing page
-login.php        — Login (session-based). POST to self.
-signup.php       — Self-registration with role selector (cliente/admin).
-                   CRITICAL BUG: form action="singup.php" — typo, should be "signup.php".
-password.php     — Change password (requires session). Redirects non-logged-in to login.
-logout.php       — Destroys session, clears cookie, redirects to login.
-adm.php          — Admin dashboard (purely static HTML/CSS mockup, no PHP backend logic).
-conexion.php     — PDO connection. Included by login/signup/password.
-bd.sql           — Partial schema: productos, ordenes, orden_detalles. Missing usuarios table.
-login.css        — Auth pages styling (dark theme, Inter font).
-styles.css       — Landing page styling (Montserrat font, glassmorphism nav).
-adm.css          — Admin dashboard styling (includes modal for "New Order").
+index.html        — Landing con botón "Iniciar Sesión"
+login.php         — Login (session-based). Redirige por rol: admin→adm.php, cajero→cajero.php, cliente→cliente.php.
+signup.php        — Registro (solo rol cliente). Form valida email, contraseña ≥6, email único.
+password.php      — Cambio de contraseña (requiere sesión, cualquier rol).
+logout.php        — Destruye sesión, limpia cookie, redirige a login.
+auth.php          — Guardia de sesión: checkRole('admin'|'cajero'|'cliente'|[...]).
+conexion.php      — Conexión PDO. Requerido por todas las páginas que tocan BD.
+bd.sql            — Schema completo (5 tablas) + datos semilla (4 categorías, 11 productos).
+admin_api.php     — JSON API del admin: 18 acciones (dashboard, CRUD cajeros/categorías/productos, reportes, QR).
+adm.php           — Dashboard admin: 6 tabs (Dashboard, Cajeros, Categorías, Productos, Reportes, Escanear QR).
+adm.css           — Estilos del dashboard admin (tabs, modales, tablas, reportes, scanner).
+cajero_api.php    — JSON API del cajero: 6 acciones (listar pedidos, cambiar estado, venta rápida, QR).
+cajero.php        — Dashboard cajero: 3 tabs (Pedidos, Nueva Venta, Escanear QR).
+cajero.css        — Estilos del dashboard cajero.
+cliente.php       — Vista cliente: catálogo por categorías, carrito, confirmar pedido.
+crear_orden.php   — API: crea orden desde el carrito del cliente (genera QR, descuenta stock).
+confirmacion.php  — Pantalla de confirmación post-pedido (QR + código + estado).
+historial.php     — Historial de pedidos del cliente.
+estado_orden.php  — API: consulta estado de una orden.
+qr-scanner.js     — Módulo compartido de escáner QR (html5-qrcode). Usado por cajero.php y adm.php.
+login.css         — Estilos de auth (dark theme, Inter font).
+styles.css        — Estilos del landing (Montserrat, glassmorphism).
+img/.htaccess     — Protege el directorio de uploads (bloquea ejecución PHP).
 ```
 
-## Known bugs / traps
+## Known limitations (no bloquean)
 
-- **`admin_dashboard.php` does not exist.** `login.php` line 9 redirects admin-role users to `admin_dashboard.php` (404). The actual admin UI is `adm.php` but it is NOT wired to login — it's a standalone HTML file with no session check, no PHP logic, no logout link.
-- **`signup.php` form action typo:** `<form action="singup.php">` on line 81. The file is `signup.php` (with 'g'). This form will POST to a 404.
-- **`bd.sql` is incomplete:** Missing the `usuarios` table that every PHP file depends on. See schema above.
-- **Anyone can self-register as admin** — no approval or invite flow. This may be intentional for a study project but is worth flagging.
-- **No CSRF protection** on any form.
-- **No `.gitignore`** — `conexion.php` env fallbacks are checked in (not sensitive since they're defaults, but be aware).
+- **No CSRF protection** en ningún formulario — limitación heredada del codebase original. Aceptable para proyecto universitario.
+- **`ordenes.estado` incluye `'cancelada'`** en el ENUM pero no existe feature de cancelación aún (reservado para futuro).
+- **`fecha_creacion` sin índice** en `ordenes` — los reportes hacen table scan. Aceptable para el dataset de demo.
+- **Cualquiera puede self-registrarse** (solo como cliente desde Fase 2). Esto puede ser intencional para un proyecto de estudio.
 
 ## Conventions
 
 - **Language:** all code, comments, variable names, and UI labels are in Spanish.
-- **Commit style:** informal Spanish messages (e.g. "agregué js para darle funcionalidad a la modalidad de new order"). No conventional commits enforced.
-- **Styling:** two separate CSS files with slightly different design tokens (`login.css` uses `--primary-green: #70ffbd`, `adm.css` uses `--accent: #5effc4`). Be consistent when adding features.
+- **Commit style:** conventional commits en español: `type(scope): descripción`.
+- **Styling:** canonical `--accent: #70ffbd` unificado en todos los CSS (adm.css, cajero.css, cliente.css, login.css).
 - **Database access:** always through `conexion.php` which provides `$pdo` (PDO instance). All queries use prepared statements.
-- **No Composer, no autoloader, no namespaces.** Pure procedural PHP with `require` includes.
+- **No Composer, no autoloader, no namespaces.** Pure procedural PHP with `require __DIR__ . '/...'` includes.
+- **API pattern:** JSON API con action router (`$_GET['action']`), auth gate 401/403 sin redirect, errores amigables sin leak de detalles internos.
 
-## If you're adding features
+## Si estás agregando features
 
-- Wire `adm.php` into the login session flow before adding backend logic to it.
-- Fix the `signup.php` form action typo and the `admin_dashboard.php` redirect before anything else.
-- Add `usuarios` table to `bd.sql` so the schema is self-contained.
-- There are no tests. If adding backend logic to `adm.php`, consider whether testing infrastructure is in scope.
+- Usá `require_once __DIR__ . '/auth.php'; checkRole('...');` para páginas protegidas.
+- Usá `require_once __DIR__ . '/conexion.php';` para acceso a BD.
+- APIs JSON: auth manual con 401/403 + `json_encode`, nunca `header('Location')`.
+- Imágenes: validar MIME con `finfo_file` + `getimagesize()`, máximo 2MB, `move_uploaded_file` a `img/`.
+- No hay tests automatizados. Las pruebas son manuales.
 
 ---
 

@@ -1,6 +1,6 @@
 <?php
 // cajero.php — Panel del cajero: dashboard de pedidos, venta rápida, escaneo QR
-require_once 'auth.php';
+require_once __DIR__ . '/auth.php';
 checkRole('cajero');
 $nombre = $_SESSION['usuario_nombre'];
 ?>

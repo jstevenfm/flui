@@ -1,5 +1,5 @@
 <?php
-require 'conexion.php'; 
+require __DIR__ . '/conexion.php';
 $mensaje = '';
 
 if ($_SERVER["REQUEST_METHOD"] == 'POST') {

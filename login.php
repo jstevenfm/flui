@@ -1,6 +1,6 @@
 <?php
 session_start();
-require 'conexion.php';
+require __DIR__ . '/conexion.php';
 $mensaje = '';
 
 // Consumir mensaje flash de error de auth.php

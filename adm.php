@@ -483,9 +483,6 @@ $nombre = $_SESSION['usuario_nombre'];
 <script src="qr-scanner.js"></script>
 
 <script>
-// Debug: admin session
-console.log('Admin:', <?php echo json_encode($nombre); ?>);
-
 // === Utilidades ===
 function escapeHtml(s) {
     const d = document.createElement('div');

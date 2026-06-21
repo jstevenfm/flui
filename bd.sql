@@ -36,7 +36,7 @@ CREATE TABLE ordenes (
     codigo_qr VARCHAR(50) UNIQUE NULL,
     total DECIMAL(10,2) NOT NULL,
     estado ENUM('pendiente','en_preparacion','listo','entregado','cancelada')
-        NOT NULL DEFAULT 'pendiente',
+        NOT NULL DEFAULT 'pendiente',  -- 'cancelada': reservado para feature futura (no usado aún)
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (cliente_id) REFERENCES usuarios(id)
         ON DELETE SET NULL ON UPDATE CASCADE,
