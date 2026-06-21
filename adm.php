@@ -372,9 +372,56 @@ $nombre = $_SESSION['usuario_nombre'];
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span id="reportes-error-text"></span>
         </div>
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-file-invoice"></i>
-            <p>Reportes de ventas — próximamente</p>
+
+        <div class="pane-head">
+            <h2 class="section-title"><i class="fa-solid fa-file-invoice"></i> Reportes de Ventas</h2>
+        </div>
+
+        <!-- Selector de rango de fechas -->
+        <div class="date-picker">
+            <div class="preset-group">
+                <button class="btn-preset" data-preset="hoy">Hoy</button>
+                <button class="btn-preset" data-preset="semana">Semana</button>
+                <button class="btn-preset" data-preset="mes">Mes</button>
+                <button class="btn-preset" data-preset="anio">Año</button>
+            </div>
+            <div class="custom-range">
+                <div class="form-group form-group-inline">
+                    <label for="reporte-desde">Desde</label>
+                    <input type="date" id="reporte-desde">
+                </div>
+                <div class="form-group form-group-inline">
+                    <label for="reporte-hasta">Hasta</label>
+                    <input type="date" id="reporte-hasta">
+                </div>
+                <button class="btn-primary" id="btn-consultar-reportes">
+                    <i class="fa-solid fa-magnifying-glass"></i> Consultar
+                </button>
+            </div>
+        </div>
+
+        <!-- Sección 1: Ventas del período -->
+        <div class="reporte-section">
+            <h3 class="reporte-subtitle"><i class="fa-solid fa-chart-column"></i> Ventas del Período</h3>
+            <div class="table-responsive" id="reporte-ventas-container">
+                <div class="reporte-hint">Selecciona un rango de fechas para ver el reporte.</div>
+            </div>
+        </div>
+
+        <!-- Sección 2: Top productos -->
+        <div class="reporte-section">
+            <h3 class="reporte-subtitle"><i class="fa-solid fa-trophy"></i> Top Productos</h3>
+            <div class="table-responsive" id="reporte-productos-container">
+                <div class="reporte-hint">Selecciona un rango de fechas para ver el reporte.</div>
+            </div>
+        </div>
+
+        <!-- Sección 3: Ventas por cajero -->
+        <div class="reporte-section">
+            <h3 class="reporte-subtitle"><i class="fa-solid fa-user-tie"></i> Ventas por Cajero</h3>
+            <div class="table-responsive" id="reporte-cajeros-container">
+                <div class="reporte-hint">Selecciona un rango de fechas para ver el reporte.</div>
+            </div>
         </div>
     </div>
 
@@ -384,14 +431,56 @@ $nombre = $_SESSION['usuario_nombre'];
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span id="escanear-error-text"></span>
         </div>
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-qrcode"></i>
-            <p>Escáner QR — próximamente</p>
+
+        <div class="pane-head">
+            <h2 class="section-title"><i class="fa-solid fa-qrcode"></i> Escanear QR</h2>
+        </div>
+
+        <p class="scanner-help">Escanea el QR del cliente o escribe el código manualmente para buscar y reclamar la orden.</p>
+
+        <div class="scanner-controls">
+            <button class="btn-primary" id="btn-iniciar-scanner-admin">
+                <i class="fa-solid fa-camera"></i> Iniciar Escáner
+            </button>
+            <button class="btn-secondary" id="btn-detener-scanner-admin" disabled>
+                <i class="fa-solid fa-stop"></i> Detener
+            </button>
+        </div>
+
+        <!-- Contenedor de cámara -->
+        <div class="qr-reader" id="qr-reader-admin"></div>
+
+        <!-- Estado de cámara -->
+        <div class="scanner-status" id="scanner-status-admin">
+            <span class="scanner-status-text">Escáner detenido.</span>
+        </div>
+
+        <!-- Input manual -->
+        <div class="manual-input-row">
+            <input type="text" id="codigo-manual-admin" placeholder="Código alfanumérico" autocomplete="off">
+            <button class="btn-secondary" id="btn-buscar-manual-admin">
+                <i class="fa-solid fa-magnifying-glass"></i> Buscar
+            </button>
+        </div>
+
+        <!-- Panel de verificación (oculto hasta encontrar la orden) -->
+        <div class="verification-panel hidden" id="verificacion-admin">
+            <h3 class="verification-subtitle"><i class="fa-solid fa-receipt"></i> Orden Encontrada</h3>
+            <div class="verificacion-grid" id="verificacion-admin-body"></div>
+            <div class="verification-actions">
+                <button class="btn-primary" id="btn-reclamar-admin">
+                    <i class="fa-solid fa-circle-check"></i> Reclamar Orden
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Toast container for notifications -->
     <div id="toast-container"></div>
+
+<!-- Librería de escaneo QR (CDN) + módulo compartido -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="qr-scanner.js"></script>
 
 <script>
 // Debug: admin session
@@ -449,7 +538,8 @@ function activarTab(tabName) {
             case 'cajeros': cargarCajeros(); break;
             case 'categorias': cargarCategorias(); break;
             case 'productos': cargarProductos(); break;
-            // Other tabs will load in future slices
+            case 'reportes': cargarReportes(); break;
+            case 'escanear': if (typeof iniciarTabEscanear === 'function') iniciarTabEscanear(); break;
         }
     }
 }
@@ -1222,6 +1312,227 @@ async function eliminarProducto(id) {
     }
 }
 
+// =========================================================
+// Reportes (Slice 5)
+// =========================================================
+
+// --- Formatea fecha AAAA-MM-DD a dd/mes (legible) ---
+function formatearFechaCorta(fechaStr) {
+    if (!fechaStr) return '—';
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    // fechaStr viene como 'YYYY-MM-DD' desde la BD — crear fecha local sin desplazamiento de zona
+    const partes = fechaStr.substring(0, 10).split('-');
+    if (partes.length !== 3) return fechaStr;
+    return parseInt(partes[2], 10) + '/' + meses[parseInt(partes[1], 10) - 1];
+}
+
+// --- Calcula el rango (desde/hasta) para cada preset ---
+function rangoPreset(preset) {
+    const hoy = new Date();
+    const hasta = new Date(hoy);
+    const desde = new Date(hoy);
+
+    switch (preset) {
+        case 'hoy':
+            // desde y hasta = hoy
+            break;
+        case 'semana':
+            // últimos 7 días (incluyendo hoy)
+            desde.setDate(hoy.getDate() - 6);
+            break;
+        case 'mes':
+            // último 30 días (aprox. un mes, tope 31 filas por día)
+            desde.setDate(hoy.getDate() - 29);
+            break;
+        case 'anio':
+            // último 365 días
+            desde.setDate(hoy.getDate() - 364);
+            break;
+    }
+    return { desde: aAAAAMMDD(desde), hasta: aAAAAMMDD(hasta) };
+}
+
+// --- Convierte Date a string 'YYYY-MM-DD' (zona local) ---
+function aAAAAMMDD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+}
+
+// --- Vacía una sección de reporte mostrando el estado adecuado ---
+function setReporteVacio(containerId) {
+    document.getElementById(containerId).innerHTML =
+        '<div class="reporte-vacio"><i class="fa-solid fa-folder-open"></i><p>Sin datos para este período.</p></div>';
+}
+
+function setReporteCargando(containerId) {
+    document.getElementById(containerId).innerHTML =
+        '<div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+}
+
+function setReporteError(containerId, mensaje) {
+    document.getElementById(containerId).innerHTML =
+        '<div class="reporte-vacio reporte-error"><i class="fa-solid fa-triangle-exclamation"></i><p>' + escapeHtml(mensaje) + '</p></div>';
+}
+
+// --- Carga inicial: preset "Mes" por defecto ---
+async function cargarReportes() {
+    const rango = rangoPreset('mes');
+    document.getElementById('reporte-desde').value = rango.desde;
+    document.getElementById('reporte-hasta').value = rango.hasta;
+    marcarPreset('mes');
+    await consultarReportes(rango.desde, rango.hasta);
+}
+
+// --- Marca el preset activo visualmente ---
+function marcarPreset(preset) {
+    document.querySelectorAll('.btn-preset').forEach(b => {
+        b.classList.toggle('active', b.dataset.preset === preset);
+    });
+}
+
+// --- Dispara los 3 fetch al cambiar rango ---
+async function consultarReportes(desde, hasta) {
+    const errorBox = document.getElementById('reportes-error');
+    const errorText = document.getElementById('reportes-error-text');
+    errorBox.classList.add('hidden');
+
+    if (!desde || !hasta) {
+        errorText.textContent = 'Selecciona ambas fechas del rango.';
+        errorBox.classList.remove('hidden');
+        return;
+    }
+    if (desde > hasta) {
+        errorText.textContent = 'La fecha "desde" no puede ser mayor que "hasta".';
+        errorBox.classList.remove('hidden');
+        return;
+    }
+
+    // Disparar las 3 consultas en paralelo
+    fetchReporte('ventas', desde, hasta);
+    fetchReporte('productos', desde, hasta);
+    fetchReporte('cajeros', desde, hasta);
+}
+
+// --- Fetch + render de un reporte individual ---
+async function fetchReporte(tipo, desde, hasta) {
+    const containerId = 'reporte-' + tipo + '-container';
+    const action = 'reporte_' + tipo;
+    setReporteCargando(containerId);
+
+    try {
+        const resp = await fetch('admin_api.php?action=' + action + '&desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta));
+        const data = await resp.json();
+
+        if (!data.success) {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = 'login.php';
+                return;
+            }
+            setReporteError(containerId, data.error || data.message || 'Error al cargar el reporte.');
+            return;
+        }
+
+        if (tipo === 'ventas') {
+            renderReporteVentas(data.ventas || []);
+        } else if (tipo === 'productos') {
+            renderReporteProductos(data.productos || []);
+        } else if (tipo === 'cajeros') {
+            renderReporteCajeros(data.cajeros || []);
+        }
+    } catch (e) {
+        setReporteError(containerId, 'Error de conexión.');
+    }
+}
+
+// --- Render: Ventas del período ---
+function renderReporteVentas(ventas) {
+    const container = document.getElementById('reporte-ventas-container');
+    if (!ventas.length) { setReporteVacio('reporte-ventas-container'); return; }
+
+    let html = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>Fecha</th><th># Órdenes</th><th>Total</th>'
+        + '</tr></thead><tbody>';
+    let totalOrd = 0;
+    let total$ = 0;
+    ventas.forEach(v => {
+        totalOrd += v.ordenes;
+        total$ += v.total;
+        html += '<tr>'
+            + '<td data-label="Fecha">' + escapeHtml(formatearFechaCorta(v.fecha)) + '</td>'
+            + '<td data-label="# Órdenes">' + v.ordenes + '</td>'
+            + '<td data-label="Total">$' + formatoPrecio(v.total) + '</td>'
+            + '</tr>';
+    });
+    // Fila de totales
+    html += '<tr class="reporte-totales">'
+        + '<td data-label="Fecha"><strong>Total</strong></td>'
+        + '<td data-label="# Órdenes"><strong>' + totalOrd + '</strong></td>'
+        + '<td data-label="Total"><strong>$' + formatoPrecio(total$) + '</strong></td>'
+        + '</tr>';
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Render: Top productos ---
+function renderReporteProductos(productos) {
+    const container = document.getElementById('reporte-productos-container');
+    if (!productos.length) { setReporteVacio('reporte-productos-container'); return; }
+
+    let html = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>#</th><th>Producto</th><th>Cantidad Vendida</th><th>Total</th>'
+        + '</tr></thead><tbody>';
+    productos.forEach((p, i) => {
+        html += '<tr>'
+            + '<td data-label="#">' + (i + 1) + '</td>'
+            + '<td data-label="Producto">' + escapeHtml(p.nombre) + '</td>'
+            + '<td data-label="Cantidad Vendida">' + p.cantidad + '</td>'
+            + '<td data-label="Total">$' + formatoPrecio(p.total) + '</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Render: Ventas por cajero ---
+function renderReporteCajeros(cajeros) {
+    const container = document.getElementById('reporte-cajeros-container');
+    if (!cajeros.length) { setReporteVacio('reporte-cajeros-container'); return; }
+
+    let html = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>Cajero</th><th># Órdenes</th><th>Total</th>'
+        + '</tr></thead><tbody>';
+    cajeros.forEach(c => {
+        html += '<tr>'
+            + '<td data-label="Cajero"><strong>' + escapeHtml(c.usuario) + '</strong></td>'
+            + '<td data-label="# Órdenes">' + c.ordenes + '</td>'
+            + '<td data-label="Total">$' + formatoPrecio(c.total) + '</td>'
+            + '</tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Eventos del selector de fechas ---
+document.querySelectorAll('.btn-preset').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const preset = this.dataset.preset;
+        const rango = rangoPreset(preset);
+        document.getElementById('reporte-desde').value = rango.desde;
+        document.getElementById('reporte-hasta').value = rango.hasta;
+        marcarPreset(preset);
+        consultarReportes(rango.desde, rango.hasta);
+    });
+});
+
+document.getElementById('btn-consultar-reportes').addEventListener('click', function() {
+    marcarPreset(null); // limpia el preset activo si se usa rango personalizado
+    const desde = document.getElementById('reporte-desde').value;
+    const hasta = document.getElementById('reporte-hasta').value;
+    consultarReportes(desde, hasta);
+});
+
 // --- Preview de imagen al seleccionar archivo ---
 document.getElementById('producto-nuevo-imagen').addEventListener('change', function() {
     const file = this.files[0];
@@ -1303,6 +1614,231 @@ document.addEventListener('click', function(e) {
         e.target.classList.remove('active');
         const quedanAbiertos = document.querySelectorAll('.modal-overlay.active').length > 0;
         if (!quedanAbiertos) document.body.style.overflow = '';
+    }
+});
+
+// =========================================================
+// Escanear QR — Admin (Slice 5)
+// =========================================================
+
+// Instancia del escáner compartido (se inicializa al activar la tab)
+let adminScanner = null;
+let ordenAdminActual = null; // id de la orden mostrada en el panel de verificación
+
+// --- Inicializa el escáner (lazy, al abrir la tab por primera vez) ---
+function iniciarTabEscanear() {
+    if (adminScanner) return; // ya inicializado
+    if (typeof initQrScanner !== 'function') {
+        mostrarErrorAdmin('El módulo de escáner no está disponible.');
+        return;
+    }
+    adminScanner = initQrScanner({
+        containerId: 'qr-reader-admin',
+        manualInputId: 'codigo-manual-admin',
+        manualBtnId: 'btn-buscar-manual-admin',
+        onScanResult: function (code) { buscarOrdenAdmin(code); },
+        onError: function (msg) { mostrarEstadoScanner(msg, 'error'); }
+    });
+
+    // Botones de control
+    document.getElementById('btn-iniciar-scanner-admin').addEventListener('click', function () {
+        iniciarScannerAdmin();
+    });
+    document.getElementById('btn-detener-scanner-admin').addEventListener('click', function () {
+        detenerScannerAdmin();
+    });
+    document.getElementById('btn-reclamar-admin').addEventListener('click', function () {
+        reclamarOrdenAdmin();
+    });
+}
+
+// --- Inicia la cámara ---
+async function iniciarScannerAdmin() {
+    if (!adminScanner) return;
+    mostrarEstadoScanner('Iniciando cámara...', 'info');
+    setBtnScanner(true);
+    await adminScanner.start();
+    // start() invoca onError si falla; si llegó aquí sin error, mostramos OK
+    if (adminScanner.estaActivo()) {
+        mostrarEstadoScanner('Escáner activo. Apunta al QR del cliente.', 'ok');
+    }
+}
+
+// --- Detiene la cámara ---
+async function detenerScannerAdmin() {
+    if (!adminScanner) return;
+    await adminScanner.stop();
+    setBtnScanner(false);
+    mostrarEstadoScanner('Escáner detenido.', 'info');
+}
+
+// --- Estado de botones start/stop ---
+function setBtnScanner(iniciado) {
+    document.getElementById('btn-iniciar-scanner-admin').disabled = iniciado;
+    document.getElementById('btn-detener-scanner-admin').disabled = !iniciado;
+}
+
+// --- Muestra estado de cámara ---
+function mostrarEstadoScanner(msg, tipo) {
+    const box = document.getElementById('scanner-status-admin');
+    box.className = 'scanner-status' + (tipo ? ' scanner-status-' + tipo : '');
+    box.innerHTML = '<span class="scanner-status-text">' + escapeHtml(msg) + '</span>';
+}
+
+// --- Muestra error general de la tab escanear ---
+function mostrarErrorAdmin(msg) {
+    const box = document.getElementById('escanear-error');
+    const txt = document.getElementById('escanear-error-text');
+    txt.textContent = msg;
+    box.classList.remove('hidden');
+    // Auto-ocultar a los 5s
+    setTimeout(() => box.classList.add('hidden'), 5000);
+}
+
+// --- Buscar orden por código QR ---
+async function buscarOrdenAdmin(code) {
+    if (!code) return;
+    mostrarEstadoScanner('Buscando orden...', 'info');
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=buscar_qr', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codigo_qr: code })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarErrorAdmin(data.error || 'Orden no encontrada.');
+            mostrarEstadoScanner(data.error || 'No encontrada.', 'error');
+            ocultarVerificacionAdmin();
+            return;
+        }
+
+        mostrarEstadoScanner('Orden encontrada.', 'ok');
+        renderVerificacionAdmin(data.orden, data.detalles);
+    } catch (e) {
+        mostrarErrorAdmin('Error de conexión.');
+        mostrarEstadoScanner('Error de conexión.', 'error');
+    }
+}
+
+// --- Renderiza el panel de verificación ---
+function renderVerificacionAdmin(orden, detalles) {
+    const panel = document.getElementById('verificacion-admin');
+    const body = document.getElementById('verificacion-admin-body');
+    ordenAdminActual = orden.id;
+
+    const cliente = orden.tipo_pedido === 'venta_rapida'
+        ? 'Venta rápida'
+        : (orden.cliente_nombre || '—');
+    const estadoLabel = {
+        pendiente: 'Pendiente',
+        en_preparacion: 'En preparación',
+        listo: 'Listo',
+        entregado: 'Entregado',
+        cancelada: 'Cancelada'
+    };
+    const lbl = estadoLabel[orden.estado] || orden.estado;
+
+    // ¿Se puede reclamar? Solo si estado === 'listo'
+    const reclamble = orden.estado === 'listo';
+    const btnReclamar = document.getElementById('btn-reclamar-admin');
+    btnReclamar.disabled = !reclamble;
+    btnReclamar.title = reclamble ? '' : 'La orden debe estar en estado "listo" para reclamarla';
+
+    let itemsHtml = '<table class="admin-table report-table"><thead><tr>'
+        + '<th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th>'
+        + '</tr></thead><tbody>';
+    let subtotal = 0;
+    detalles.forEach(d => {
+        const sub = d.cantidad * d.precio_unitario;
+        subtotal += sub;
+        itemsHtml += '<tr>'
+            + '<td data-label="Producto">' + escapeHtml(d.nombre) + '</td>'
+            + '<td data-label="Cant.">' + d.cantidad + '</td>'
+            + '<td data-label="Precio">$' + formatoPrecio(d.precio_unitario) + '</td>'
+            + '<td data-label="Subtotal">$' + formatoPrecio(sub) + '</td>'
+            + '</tr>';
+    });
+    itemsHtml += '</tbody></table>';
+
+    body.innerHTML =
+        '<div class="ver-row"><span class="ver-label">Orden #</span><span class="ver-value">' + orden.id + '</span></div>'
+        + '<div class="ver-row"><span class="ver-label">Cliente</span><span class="ver-value">' + escapeHtml(cliente) + '</span></div>'
+        + '<div class="ver-row"><span class="ver-label">Estado</span><span class="ver-value"><span class="estado-badge estado-' + escapeHtml(orden.estado) + '">' + lbl + '</span></span></div>'
+        + '<div class="ver-row"><span class="ver-label">Total</span><span class="ver-value ver-total">$' + formatoPrecio(orden.total) + '</span></div>'
+        + '<div class="ver-items-label">Ítems</div>'
+        + itemsHtml;
+
+    panel.classList.remove('hidden');
+}
+
+function ocultarVerificacionAdmin() {
+    document.getElementById('verificacion-admin').classList.add('hidden');
+    ordenAdminActual = null;
+}
+
+// --- Reclamar la orden verificada ---
+async function reclamarOrdenAdmin() {
+    if (!ordenAdminActual) return;
+    const btn = document.getElementById('btn-reclamar-admin');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reclamando...';
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=reclamar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orden_id: ordenAdminActual })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo reclamar la orden.');
+            mostrarErrorAdmin(data.error || 'No se pudo reclamar.');
+            btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Reclamar Orden';
+            btn.disabled = false;
+            return;
+        }
+
+        mostrarToast('exito', 'Orden #' + ordenAdminActual + ' reclamada exitosamente.');
+        ocultarVerificacionAdmin();
+        mostrarEstadoScanner('Orden reclamada. Escanea otro código.', 'ok');
+        btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Reclamar Orden';
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+        btn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Reclamar Orden';
+        btn.disabled = false;
+    }
+}
+
+// --- Detener el escáner al salir de la tab "escanear" ---
+// Listener sobre clicks en tabs: si se clickea una tab que NO es escanear,
+// y el escáner está activo, lo detenemos para liberar la cámara.
+document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.addEventListener('click', function () {
+        if (this.dataset.tab !== 'escanear' && adminScanner && adminScanner.estaActivo()) {
+            detenerScannerAdmin();
+        }
+    });
+});
+
+// También detener al cambiar el hash por navegación (atrás/adelante)
+window.addEventListener('hashchange', function () {
+    const h = window.location.hash.replace('#', '');
+    if (h !== 'escanear' && adminScanner && adminScanner.estaActivo()) {
+        detenerScannerAdmin();
     }
 });
 </script>

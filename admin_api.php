@@ -95,6 +95,14 @@ switch ($action) {
         actionReporteCajeros($pdo);
         break;
 
+    case 'buscar_qr':
+        actionBuscarQr($pdo);
+        break;
+
+    case 'reclamar':
+        actionReclamar($pdo);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Acción no válida.']);
@@ -105,6 +113,12 @@ switch ($action) {
 // GET ?action=dashboard_stats — Estadísticas del día actual
 // -------------------------------------------------------
 function actionDashboardStats(PDO $pdo): void {
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
     // 1. Total ventas y órdenes entregadas hoy
     $stmt = $pdo->query("
         SELECT COALESCE(SUM(total), 0) AS total_ventas,
@@ -588,6 +602,12 @@ function procesarImagen(array $archivo): array {
         return ['success' => false, 'error' => 'Solo se permiten imágenes JPEG o PNG.'];
     }
 
+    // Verificación secundaria: ¿es realmente una imagen decodificable?
+    $imageInfo = @getimagesize($archivo['tmp_name']);
+    if ($imageInfo === false) {
+        return ['success' => false, 'error' => 'El archivo no es una imagen válida.'];
+    }
+
     // Validar tamaño (2MB)
     if ($archivo['size'] > 2 * 1024 * 1024) {
         return ['success' => false, 'error' => 'La imagen no debe exceder 2MB.'];
@@ -881,17 +901,340 @@ function actionEliminarProducto(PDO $pdo): void {
     }
 }
 
+// -------------------------------------------------------
+// Helper: validarRangoFechas — valida y normaliza desde/hasta (Y-m-d)
+// Retorna ['ok'=>bool, 'desde'=>string, 'hasta'=>string, 'error'=>string]
+// ok=false si formato inválido o desde > hasta.
+// -------------------------------------------------------
+function validarRangoFechas(): array {
+    $desde = trim((string)($_GET['desde'] ?? ''));
+    $hasta = trim((string)($_GET['hasta'] ?? ''));
+
+    $d = DateTime::createFromFormat('Y-m-d', $desde);
+    $h = DateTime::createFromFormat('Y-m-d', $hasta);
+    // createFromFormat admite fechas con warnings (ej. día 31 en mes de 30); getLastErrors() las detecta.
+    $dErrors = $d ? $d::getLastErrors() : false;
+    $hErrors = $h ? $h::getLastErrors() : false;
+
+    if (!$d || ($dErrors && ($dErrors['warning_count'] > 0 || $dErrors['error_count'] > 0))) {
+        return ['ok' => false, 'error' => 'La fecha "desde" no es válida. Use el formato AAAA-MM-DD.'];
+    }
+    if (!$h || ($hErrors && ($hErrors['warning_count'] > 0 || $hErrors['error_count'] > 0))) {
+        return ['ok' => false, 'error' => 'La fecha "hasta" no es válida. Use el formato AAAA-MM-DD.'];
+    }
+    if ($d > $h) {
+        return ['ok' => false, 'error' => 'La fecha "desde" no puede ser mayor que "hasta".'];
+    }
+
+    return ['ok' => true, 'desde' => $desde, 'hasta' => $hasta];
+}
+
+// -------------------------------------------------------
+// GET ?action=reporte_ventas — Ventas por día en un rango
+// Params: desde, hasta (AAAA-MM-DD). Solo órdenes entregadas.
+// -------------------------------------------------------
 function actionReporteVentas(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $r = validarRangoFechas();
+    if (!$r['ok']) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => $r['error']]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT DATE(o.fecha_creacion) AS fecha,
+                   COUNT(*) AS ordenes,
+                   COALESCE(SUM(o.total), 0) AS total
+            FROM ordenes o
+            WHERE o.estado = 'entregado'
+              AND o.fecha_creacion BETWEEN ? AND ?
+            GROUP BY DATE(o.fecha_creacion)
+            ORDER BY fecha DESC
+        ");
+        // BETWEEN intervalo completo del día inicial al último segundo del día final
+        $stmt->execute([
+            $r['desde'] . ' 00:00:00',
+            $r['hasta'] . ' 23:59:59',
+        ]);
+        $ventas = $stmt->fetchAll();
+
+        // Normalizar tipos numéricos (PDO-mysql returns strings por defecto)
+        foreach ($ventas as &$row) {
+            $row['ordenes'] = (int)$row['ordenes'];
+            $row['total'] = (float)$row['total'];
+        }
+        unset($row);
+
+        echo json_encode([
+            'success' => true,
+            'desde' => $r['desde'],
+            'hasta' => $r['hasta'],
+            'ventas' => $ventas,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// GET ?action=reporte_productos — Top 20 productos por cantidad vendida
+// Params: desde, hasta (AAAA-MM-DD). Solo órdenes entregadas.
+// -------------------------------------------------------
 function actionReporteProductos(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $r = validarRangoFechas();
+    if (!$r['ok']) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => $r['error']]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT p.nombre,
+                   SUM(od.cantidad) AS cantidad,
+                   SUM(od.cantidad * od.precio_unitario) AS total
+            FROM orden_detalles od
+            JOIN ordenes o ON od.orden_id = o.id
+            JOIN productos p ON od.producto_id = p.id
+            WHERE o.estado = 'entregado'
+              AND o.fecha_creacion BETWEEN ? AND ?
+            GROUP BY p.id
+            ORDER BY cantidad DESC
+            LIMIT 20
+        ");
+        $stmt->execute([
+            $r['desde'] . ' 00:00:00',
+            $r['hasta'] . ' 23:59:59',
+        ]);
+        $productos = $stmt->fetchAll();
+
+        foreach ($productos as &$row) {
+            $row['cantidad'] = (int)$row['cantidad'];
+            $row['total'] = (float)$row['total'];
+        }
+        unset($row);
+
+        echo json_encode([
+            'success' => true,
+            'desde' => $r['desde'],
+            'hasta' => $r['hasta'],
+            'productos' => $productos,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// GET ?action=reporte_cajeros — Ventas por cajero en un rango
+// Params: desde, hasta (AAAA-MM-DD). Solo órdenes entregadas.
+// Incluye venta_rapida (cajero_id siempre asignado).
+// -------------------------------------------------------
 function actionReporteCajeros(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $r = validarRangoFechas();
+    if (!$r['ok']) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => $r['error']]);
+        return;
+    }
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT u.usuario,
+                   COUNT(*) AS ordenes,
+                   COALESCE(SUM(o.total), 0) AS total
+            FROM ordenes o
+            JOIN usuarios u ON o.cajero_id = u.id
+            WHERE o.estado = 'entregado'
+              AND o.fecha_creacion BETWEEN ? AND ?
+              AND o.cajero_id IS NOT NULL
+            GROUP BY u.id
+            ORDER BY total DESC
+        ");
+        $stmt->execute([
+            $r['desde'] . ' 00:00:00',
+            $r['hasta'] . ' 23:59:59',
+        ]);
+        $cajeros = $stmt->fetchAll();
+
+        foreach ($cajeros as &$row) {
+            $row['ordenes'] = (int)$row['ordenes'];
+            $row['total'] = (float)$row['total'];
+        }
+        unset($row);
+
+        echo json_encode([
+            'success' => true,
+            'desde' => $r['desde'],
+            'hasta' => $r['hasta'],
+            'cajeros' => $cajeros,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
+}
+
+// -------------------------------------------------------
+// POST ?action=buscar_qr — Busca una orden por su código QR
+// Body JSON: { codigo_qr }
+// Retorna detalles de la orden (id, cliente, tipo, total, estado, items).
+// 404 si el código no existe en ordenes.codigo_qr.
+// -------------------------------------------------------
+function actionBuscarQr(PDO $pdo): void {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $codigo = trim((string)($input['codigo_qr'] ?? ''));
+
+    if ($codigo === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El código QR es obligatorio.']);
+        return;
+    }
+
+    try {
+        // Cabecera de la orden
+        $stmt = $pdo->prepare("
+            SELECT o.id, o.total, o.estado, o.fecha_creacion, o.tipo_pedido, o.cliente_id, o.cajero_id,
+                   u.usuario AS cliente_nombre
+            FROM ordenes o
+            LEFT JOIN usuarios u ON o.cliente_id = u.id
+            WHERE o.codigo_qr = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$codigo]);
+        $orden = $stmt->fetch();
+
+        if (!$orden) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Orden no encontrada.']);
+            return;
+        }
+
+        // Detalle de la orden
+        $stmt = $pdo->prepare("
+            SELECT p.nombre, od.cantidad, od.precio_unitario
+            FROM orden_detalles od
+            JOIN productos p ON od.producto_id = p.id
+            WHERE od.orden_id = ?
+            ORDER BY p.nombre
+        ");
+        $stmt->execute([$orden['id']]);
+        $detalles = $stmt->fetchAll();
+
+        // Normalizar tipos numéricos
+        $orden['id'] = (int)$orden['id'];
+        $orden['total'] = (float)$orden['total'];
+        $orden['cliente_id'] = $orden['cliente_id'] !== null ? (int)$orden['cliente_id'] : null;
+        $orden['cajero_id'] = $orden['cajero_id'] !== null ? (int)$orden['cajero_id'] : null;
+        foreach ($detalles as &$d) {
+            $d['cantidad'] = (int)$d['cantidad'];
+            $d['precio_unitario'] = (float)$d['precio_unitario'];
+        }
+        unset($d);
+
+        echo json_encode([
+            'success' => true,
+            'orden' => $orden,
+            'detalles' => $detalles,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
+}
+
+// -------------------------------------------------------
+// POST ?action=reclamar — Marca una orden como entregada
+// Body JSON: { orden_id }
+// Optimistic lock: solo actualiza si estado='listo'.
+// rowCount=0 → la orden ya no está 'listo' (ya reclamada or otro estado).
+// Registra cajero_id = el usuario admin que reclama ($_SESSION['usuario_id']).
+// -------------------------------------------------------
+function actionReclamar(PDO $pdo): void {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $orden_id = (int)($input['orden_id'] ?? 0);
+
+    if ($orden_id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de orden no válido.']);
+        return;
+    }
+
+    $cajero_id = (int)($_SESSION['usuario_id'] ?? 0);
+
+    try {
+        // Optimistic lock: WHERE estado='listo' —— si alguien más reclamó
+        // primero, la fila ya no cumple la condición y rowCount=0.
+        $stmt = $pdo->prepare(
+            "UPDATE ordenes
+             SET estado = 'entregado', cajero_id = ?
+             WHERE id = ? AND estado = 'listo'"
+        );
+        $stmt->execute([$cajero_id, $orden_id]);
+
+        if ($stmt->rowCount() === 0) {
+            // Distinguir: ¿existe la orden y no está 'listo', o no existe?
+            $check = $pdo->prepare("SELECT estado FROM ordenes WHERE id = ?");
+            $check->execute([$orden_id]);
+            $estado = $check->fetchColumn();
+
+            http_response_code(409);
+            if ($estado === false) {
+                echo json_encode(['success' => false, 'error' => 'La orden no existe.']);
+            } elseif ($estado === 'entregado') {
+                echo json_encode(['success' => false, 'error' => 'Esta orden ya fue reclamada.']);
+            } else {
+                $labels = [
+                    'pendiente' => 'pendiente',
+                    'en_preparacion' => 'en preparación',
+                    'cancelada' => 'cancelada',
+                ];
+                $lbl = $labels[$estado] ?? $estado;
+                echo json_encode(['success' => false, 'error' => 'La orden no está lista para reclamar (estado: ' . $lbl . ').']);
+            }
+            return;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Orden reclamada exitosamente.',
+            'orden_id' => $orden_id,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
