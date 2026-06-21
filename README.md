@@ -88,11 +88,9 @@ El proyecto carga librerías externas por CDN. Se necesita conexión a internet.
 | Librería        | Versión | CDN | Usada por |
 |-----------------|---------|-----|-----------|
 | Font Awesome    | 6.4.0   | `cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/all.min.css` | Todas las vistas |
-| Font Awesome    | 6.0.0   | `cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/all.min.css` | `login.php`, `signup.php`, `password.php` |
 | Google Fonts Inter | — | `fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700` | Todas las vistas |
 | Google Fonts Montserrat | — | `fonts.googleapis.com/css2?family=Montserrat` | `index.html` |
-| html5-qrcode    | 2.3.8   | `cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js` | `adm.php` |
-| html5-qrcode    | latest  | `unpkg.com/html5-qrcode` | `cajero.php` |
+| html5-qrcode    | 2.3.8   | `cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js` | `adm.php`, `cajero.php` |
 | qrcodejs        | 1.0.0   | `cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js` | `confirmacion.php` |
 
 ## Demo Walkthrough
@@ -115,3 +113,4 @@ Para probar el flujo completo del sistema, ver [`docs/demo.md`](docs/demo.md).
 - **Sin índice en `fecha_creacion`** — Los reportes hacen table scan sobre `ordenes`. Aceptable para datos de demo.
 - **Sin tests automatizados** — Solo pruebas manuales.
 - **Dependencias CDN en runtime** — Sin internet, los íconos, fuentes y escáner QR no cargan.
+- **Nombre de BD legacy `sistema_usuarios`** — El nombre de la base de datos por defecto es `sistema_usuarios` (heredado del proyecto original). Si usás otro nombre, configuralo en `DB_NAME`.
