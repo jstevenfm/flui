@@ -28,7 +28,7 @@ password.php      — Cambio de contraseña (requiere sesión, cualquier rol).
 logout.php        — Destruye sesión, limpia cookie, redirige a login.
 auth.php          — Guardia de sesión: checkRole('admin'|'cajero'|'cliente'|[...]).
 conexion.php      — Conexión PDO. Requerido por todas las páginas que tocan BD.
-bd.sql            — Schema completo (5 tablas) + datos semilla (4 categorías, 11 productos).
+bd.sql            — Schema completo (5 tablas) + datos semilla (4 categorías, 12 productos, 2 usuarios seed).
 admin_api.php     — JSON API del admin: 18 acciones (dashboard, CRUD cajeros/categorías/productos, reportes, QR).
 adm.php           — Dashboard admin: 6 tabs (Dashboard, Cajeros, Categorías, Productos, Reportes, Escanear QR).
 adm.css           — Estilos del dashboard admin (tabs, modales, tablas, reportes, scanner).

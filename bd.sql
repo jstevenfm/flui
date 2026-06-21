@@ -86,3 +86,14 @@ INSERT INTO productos (categoria_id, nombre, precio, stock, imagen) VALUES
     (4, 'Empanada',          3000.00, 50, NULL),
     (4, 'Arepa de Queso',    3500.00, 14, 'arepa.jpg'),
     (4, 'Galletas Artesanales',2500.00, 0, NULL);
+
+-- ============================================================
+-- USUARIOS SEMILLA — Para demo (eliminar en producción)
+-- ============================================================
+-- Credenciales:
+--   admin@flui.com  / admin123   (rol: admin)
+--   cajero@flui.com / cajero123  (rol: cajero)
+-- Contraseñas hasheadas con password_hash(PASSWORD_BCRYPT) en PHP 8+
+INSERT IGNORE INTO usuarios (usuario, email, password, rol, activo) VALUES
+    ('Administrador', 'admin@flui.com', '$2y$12$oRj2MULCq427t3Sr5rsL6.fKyO6LVuC/fXAC93L64huDcDAmB3OLG', 'admin', TRUE),
+    ('Cajero Demo', 'cajero@flui.com', '$2y$12$KGd6LZK50QzUX.mPKx65euBMO8C2UPcAkJbh/Dg9Sl0PNoq1B5Ikm', 'cajero', TRUE);
