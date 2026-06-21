@@ -1,4 +1,10 @@
 -- 0. Usuarios: clientes, cajeros, admins
+DROP TABLE IF EXISTS orden_detalles;
+DROP TABLE IF EXISTS ordenes;
+DROP TABLE IF EXISTS productos;
+DROP TABLE IF EXISTS categorias;
+DROP TABLE IF EXISTS usuarios;
+
 CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     usuario VARCHAR(100) NOT NULL,
