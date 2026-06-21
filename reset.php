@@ -56,15 +56,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 if (strlen($password_nueva) >= 6) {
                     // Hashear y actualizar contraseña, anular token
                     $hash = password_hash($password_nueva, PASSWORD_BCRYPT);
-                    $stmt = $pdo->prepare("UPDATE usuarios SET password = ?, reset_token = NULL, reset_token_expires = NULL WHERE id = ?");
-                    $stmt->execute([$hash, $user['id']]);
+                    $stmt = $pdo->prepare("UPDATE usuarios SET password = ?, reset_token_expires = NULL WHERE reset_token = ? AND reset_token_expires > NOW() AND activo = TRUE");
+                    $stmt->execute([$hash, $token]);
                     $mensaje = "<div class='alert alert-success'>Contraseña actualizada correctamente. <a href='login.php'>Iniciar sesión</a>.</div>";
                     $token_valido = false; // Ocultar formulario tras éxito
                 } else {
                     $mensaje = "<div class='alert alert-danger'>La contraseña debe tener al menos 6 caracteres.</div>";
                 }
             } else {
-                $mensaje = "<div class='alert alert-danger'>Por favor, completa todos los campos.</div>";
+                $mensaje = "<div class='alert alert-danger'>Por favor, ingresa tu nueva contraseña.</div>";
             }
         } else {
             // Token no válido en POST
