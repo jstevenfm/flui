@@ -253,10 +253,116 @@ $nombre = $_SESSION['usuario_nombre'];
         <div class="pane-error hidden" id="productos-error">
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span id="productos-error-text"></span>
+            <button onclick="cargarProductos()" class="btn-reintento"><i class="fa-solid fa-arrows-rotate"></i> Reintentar</button>
         </div>
-        <div class="tab-placeholder">
-            <i class="fa-solid fa-box"></i>
-            <p>Gestión de productos — próximamente</p>
+
+        <div class="pane-head">
+            <h2 class="section-title"><i class="fa-solid fa-box"></i> Gestionar Productos</h2>
+            <button class="btn-primary" onclick="abrirModalCrearProducto()">
+                <i class="fa-solid fa-plus"></i> Nuevo Producto
+            </button>
+        </div>
+
+        <div class="table-responsive" id="productos-container">
+            <div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear producto -->
+    <div class="modal-overlay" id="modal-crear-producto">
+        <div class="modal-content">
+            <button class="modal-close" onclick="cerrarModal('modal-crear-producto')">&times;</button>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-box"></i> Nuevo Producto</h3>
+            </div>
+            <div class="modal-body">
+                <form id="form-crear-producto" onsubmit="guardarProducto(event)" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="producto-nuevo-nombre">Nombre</label>
+                        <input type="text" id="producto-nuevo-nombre" name="nombre" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-nuevo-precio">Precio ($)</label>
+                        <input type="number" id="producto-nuevo-precio" name="precio" required min="0.01" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-nuevo-stock">Stock</label>
+                        <input type="number" id="producto-nuevo-stock" name="stock" required min="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-nuevo-categoria">Categoría</label>
+                        <select id="producto-nuevo-categoria" name="categoria_id" required>
+                            <option value="">Seleccionar categoría</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-nuevo-imagen">Imagen (JPEG o PNG, máx. 2MB)</label>
+                        <div class="file-input-wrapper">
+                            <label for="producto-nuevo-imagen" class="btn-secondary btn-file-label">
+                                <i class="fa-solid fa-upload"></i> Elegir archivo
+                            </label>
+                            <input type="file" id="producto-nuevo-imagen" name="imagen" accept="image/jpeg,image/png">
+                            <span id="producto-nuevo-imagen-nombre" class="file-name">Ningún archivo seleccionado</span>
+                        </div>
+                        <img id="producto-nuevo-imagen-preview" class="image-preview" src="" alt="" style="display:none;">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModal('modal-crear-producto')">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Crear</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar producto -->
+    <div class="modal-overlay" id="modal-editar-producto">
+        <div class="modal-content">
+            <button class="modal-close" onclick="cerrarModal('modal-editar-producto')">&times;</button>
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-box"></i> Editar Producto</h3>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-producto" onsubmit="actualizarProducto(event)" enctype="multipart/form-data">
+                    <input type="hidden" id="producto-editar-id" name="id">
+                    <div class="form-group">
+                        <label for="producto-editar-nombre">Nombre</label>
+                        <input type="text" id="producto-editar-nombre" name="nombre" required maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-editar-precio">Precio ($)</label>
+                        <input type="number" id="producto-editar-precio" name="precio" required min="0.01" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-editar-stock">Stock</label>
+                        <input type="number" id="producto-editar-stock" name="stock" required min="0" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-editar-categoria">Categoría</label>
+                        <select id="producto-editar-categoria" name="categoria_id" required>
+                            <option value="">Seleccionar categoría</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="producto-editar-imagen">Imagen (dejar vacío para mantener la actual)</label>
+                        <div class="file-input-wrapper">
+                            <label for="producto-editar-imagen" class="btn-secondary btn-file-label">
+                                <i class="fa-solid fa-upload"></i> Elegir archivo
+                            </label>
+                            <input type="file" id="producto-editar-imagen" name="imagen" accept="image/jpeg,image/png">
+                            <span id="producto-editar-imagen-nombre" class="file-name">Ningún archivo seleccionado</span>
+                        </div>
+                        <img id="producto-editar-imagen-preview" class="image-preview" src="" alt="" style="display:none;">
+                        <div id="producto-editar-imagen-actual" style="display:none; margin-top:4px;">
+                            Imagen actual: <span id="producto-editar-imagen-actual-nombre" class="text-muted"></span>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" onclick="cerrarModal('modal-editar-producto')">Cancelar</button>
+                        <button type="submit" class="btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
@@ -342,6 +448,7 @@ function activarTab(tabName) {
             case 'dashboard': cargarDashboard(); break;
             case 'cajeros': cargarCajeros(); break;
             case 'categorias': cargarCategorias(); break;
+            case 'productos': cargarProductos(); break;
             // Other tabs will load in future slices
         }
     }
@@ -858,6 +965,301 @@ async function eliminarCategoria(id) {
         mostrarToast('error', 'Error de conexión.');
     }
 }
+
+// =========================================================
+// Productos CRUD (Slice 4)
+// =========================================================
+
+// Cache en memoria de los productos cargados (para botones de acción)
+let productosCache = [];
+// Cache de categorías compartido (se llena al abrir modal de producto si no existe)
+let categoriasParaSelect = null;
+
+// --- Cargar lista de productos ---
+async function cargarProductos() {
+    const container = document.getElementById('productos-container');
+    const errorBox = document.getElementById('productos-error');
+    const errorText = document.getElementById('productos-error-text');
+    errorBox.classList.add('hidden');
+    container.innerHTML = '<div class="spinner"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+
+    try {
+        const resp = await fetch('admin_api.php?action=listar_productos');
+        const data = await resp.json();
+
+        if (!data.success) {
+            if (resp.status === 401 || resp.status === 403) {
+                window.location.href = 'login.php';
+                return;
+            }
+            throw new Error(data.error || data.message || 'Error al cargar productos.');
+        }
+
+        productosCache = data.productos || [];
+        renderTablaProductos(productosCache);
+    } catch (e) {
+        errorText.textContent = e.message || 'Error de conexión.';
+        errorBox.classList.remove('hidden');
+        container.innerHTML = '';
+    }
+}
+
+// --- Renderizar tabla de productos ---
+function renderTablaProductos(productos) {
+    const container = document.getElementById('productos-container');
+
+    if (!productos || productos.length === 0) {
+        container.innerHTML =
+            '<table class="admin-table"><thead><tr>'
+            + '<th>Imagen</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Stock</th><th>Acciones</th>'
+            + '</tr></thead><tbody>'
+            + '<tr><td colspan="6" class="empty-state"><i class="fa-solid fa-box-open"></i><p>No hay productos registrados.</p></td></tr>'
+            + '</tbody></table>';
+        return;
+    }
+
+    let html = '<table class="admin-table"><thead><tr>'
+        + '<th>Imagen</th><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Stock</th><th>Acciones</th>'
+        + '</tr></thead><tbody>';
+
+    productos.forEach(p => {
+        const imgHtml = p.imagen
+            ? '<img src="img/' + escapeHtml(p.imagen) + '" alt="' + escapeHtml(p.nombre) + '" class="product-thumb">'
+            : '<div class="product-thumb product-thumb-placeholder"><i class="fa-solid fa-image"></i></div>';
+
+        const stockBadge = parseInt(p.stock, 10) > 0
+            ? '<span class="stock-badge stock-badge-ok">' + p.stock + '</span>'
+            : '<span class="stock-badge stock-badge-zero">0</span>';
+
+        html += '<tr>'
+            + '<td data-label="Imagen">' + imgHtml + '</td>'
+            + '<td data-label="Nombre"><strong>' + escapeHtml(p.nombre) + '</strong></td>'
+            + '<td data-label="Categoría">' + escapeHtml(p.categoria_nombre) + '</td>'
+            + '<td data-label="Precio">$' + formatoPrecio(p.precio) + '</td>'
+            + '<td data-label="Stock">' + stockBadge + '</td>'
+            + '<td data-label="Acciones" class="acciones-cell">'
+            +   '<button class="btn-icon btn-secondary" onclick="abrirModalEditarProducto(' + p.id + ')">'
+            +     '<i class="fa-solid fa-pen"></i> Editar'
+            +   '</button>'
+            +   '<button class="btn-icon btn-danger" onclick="eliminarProducto(' + p.id + ')">'
+            +     '<i class="fa-solid fa-trash"></i> Eliminar'
+            +   '</button>'
+            + '</td>'
+            + '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// --- Cargar categorías en un <select> (compartido entre crear y editar) ---
+async function cargarCategoriasEnSelect(selectId) {
+    const select = document.getElementById(selectId);
+    // Limpiar opciones actuales excepto la primera (placeholder)
+    while (select.options.length > 1) {
+        select.remove(1);
+    }
+
+    // Reutilizar cache si ya se cargaron
+    let categorias = categoriasParaSelect;
+    if (!categorias) {
+        try {
+            const resp = await fetch('admin_api.php?action=listar_categorias');
+            const data = await resp.json();
+            if (data.success) {
+                categorias = data.categorias || [];
+                categoriasParaSelect = categorias;
+            }
+        } catch (e) {
+            mostrarToast('error', 'Error al cargar categorías.');
+            return;
+        }
+    }
+
+    categorias.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.nombre;
+        select.appendChild(opt);
+    });
+}
+
+// --- Abrir modal crear producto ---
+async function abrirModalCrearProducto() {
+    document.getElementById('form-crear-producto').reset();
+    document.getElementById('producto-nuevo-imagen-nombre').textContent = 'Ningún archivo seleccionado';
+    document.getElementById('producto-nuevo-imagen-preview').style.display = 'none';
+    await cargarCategoriasEnSelect('producto-nuevo-categoria');
+    abrirModal('modal-crear-producto');
+}
+
+// --- Guardar (crear) producto ---
+async function guardarProducto(event) {
+    event.preventDefault();
+    const form = document.getElementById('form-crear-producto');
+    const formData = new FormData(form);
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=crear_producto', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo crear el producto.');
+            return;
+        }
+
+        mostrarToast('exito', 'Producto creado exitosamente.');
+        cerrarModal('modal-crear-producto');
+        cargarProductos();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Abrir modal editar producto ---
+function abrirModalEditarProducto(id) {
+    const prod = productosCache.find(p => p.id == id);
+    if (!prod) {
+        mostrarToast('error', 'Producto no encontrado.');
+        return;
+    }
+    document.getElementById('producto-editar-id').value = prod.id;
+    document.getElementById('producto-editar-nombre').value = prod.nombre || '';
+    document.getElementById('producto-editar-precio').value = prod.precio || '';
+    document.getElementById('producto-editar-stock').value = prod.stock != null ? prod.stock : '';
+    document.getElementById('producto-editar-imagen-nombre').textContent = 'Ningún archivo seleccionado';
+    document.getElementById('producto-editar-imagen-preview').style.display = 'none';
+
+    // Mostrar imagen actual si existe
+    const imagenActualDiv = document.getElementById('producto-editar-imagen-actual');
+    const imagenActualNombre = document.getElementById('producto-editar-imagen-actual-nombre');
+    if (prod.imagen) {
+        imagenActualDiv.style.display = 'block';
+        imagenActualNombre.textContent = prod.imagen;
+    } else {
+        imagenActualDiv.style.display = 'none';
+    }
+
+    // Reset file input
+    document.getElementById('producto-editar-imagen').value = '';
+
+    // Cargar categorías y seleccionar la actual
+    cargarCategoriasEnSelect('producto-editar-categoria').then(() => {
+        document.getElementById('producto-editar-categoria').value = prod.categoria_id;
+    });
+
+    abrirModal('modal-editar-producto');
+}
+
+// --- Actualizar (editar) producto ---
+async function actualizarProducto(event) {
+    event.preventDefault();
+    const form = document.getElementById('form-editar-producto');
+    const formData = new FormData(form);
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=editar_producto', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            mostrarToast('error', data.error || 'No se pudo actualizar el producto.');
+            return;
+        }
+
+        mostrarToast('exito', 'Producto actualizado exitosamente.');
+        cerrarModal('modal-editar-producto');
+        cargarProductos();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Eliminar producto ---
+async function eliminarProducto(id) {
+    const prod = productosCache.find(p => p.id == id);
+    const nombreProd = prod ? prod.nombre : '';
+    if (!confirm('¿Eliminar el producto "' + nombreProd + '"?\nSi tiene órdenes asociadas no se podrá eliminar.')) return;
+
+    try {
+        const resp = await apiFetch('admin_api.php?action=eliminar_producto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: parseInt(id, 10) })
+        });
+
+        if (resp.status === 401 || resp.status === 403) {
+            window.location.href = 'login.php';
+            return;
+        }
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+            // 409 con órdenes asociadas
+            mostrarToast('error', data.error || 'No se pudo eliminar el producto.');
+            return;
+        }
+
+        mostrarToast('exito', 'Producto eliminado.');
+        cargarProductos();
+    } catch (e) {
+        mostrarToast('error', 'Error de conexión.');
+    }
+}
+
+// --- Preview de imagen al seleccionar archivo ---
+document.getElementById('producto-nuevo-imagen').addEventListener('change', function() {
+    const file = this.files[0];
+    const nameSpan = document.getElementById('producto-nuevo-imagen-nombre');
+    const preview = document.getElementById('producto-nuevo-imagen-preview');
+
+    if (file) {
+        nameSpan.textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        nameSpan.textContent = 'Ningún archivo seleccionado';
+        preview.style.display = 'none';
+    }
+});
+
+document.getElementById('producto-editar-imagen').addEventListener('change', function() {
+    const file = this.files[0];
+    const nameSpan = document.getElementById('producto-editar-imagen-nombre');
+    const preview = document.getElementById('producto-editar-imagen-preview');
+
+    if (file) {
+        nameSpan.textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        nameSpan.textContent = 'Ningún archivo seleccionado';
+        preview.style.display = 'none';
+    }
+});
 
 // =========================================================
 // Utilidades de API y modales (reutilizables — Slice 3+)

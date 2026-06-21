@@ -569,24 +569,316 @@ function actionEliminarCategoria(PDO $pdo): void {
     }
 }
 
+// -------------------------------------------------------
+// Helper: procesarImagen — valida y mueve archivo subido
+// Retorna ['success'=>true, 'filename'=>$name] o ['success'=>false, 'error'=>$msg]
+// Solo acepta JPEG y PNG, máximo 2MB
+// -------------------------------------------------------
+function procesarImagen(array $archivo): array {
+    if ($archivo['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'error' => 'Error al subir la imagen.'];
+    }
+
+    // Validar MIME type
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_file($finfo, $archivo['tmp_name']);
+    finfo_close($finfo);
+
+    if (!in_array($mime, ['image/jpeg', 'image/png'], true)) {
+        return ['success' => false, 'error' => 'Solo se permiten imágenes JPEG o PNG.'];
+    }
+
+    // Validar tamaño (2MB)
+    if ($archivo['size'] > 2 * 1024 * 1024) {
+        return ['success' => false, 'error' => 'La imagen no debe exceder 2MB.'];
+    }
+
+    // Generar nombre seguro
+    $safeBasename = preg_replace('/[^a-zA-Z0-9_.-]/', '', basename($archivo['name']));
+    $filename = uniqid('prod_', true) . '_' . $safeBasename;
+    $destination = __DIR__ . '/img/' . $filename;
+
+    if (!move_uploaded_file($archivo['tmp_name'], $destination)) {
+        return ['success' => false, 'error' => 'Error al guardar la imagen en el servidor.'];
+    }
+
+    return ['success' => true, 'filename' => $filename];
+}
+
+// -------------------------------------------------------
+// GET ?action=listar_productos — Lista productos con categoría
+// -------------------------------------------------------
 function actionListarProductos(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use GET.']);
+        return;
+    }
+
+    $stmt = $pdo->query("
+        SELECT p.id, p.nombre, p.precio, p.stock, p.imagen, p.categoria_id,
+               c.nombre AS categoria_nombre
+        FROM productos p
+        JOIN categorias c ON p.categoria_id = c.id
+        ORDER BY p.id DESC
+    ");
+    $productos = $stmt->fetchAll();
+
+    echo json_encode([
+        'success' => true,
+        'productos' => $productos,
+    ]);
 }
 
+// -------------------------------------------------------
+// POST ?action=crear_producto — Crea producto (multipart/form-data)
+// Campos: nombre, precio, categoria_id, stock, imagen (file, opcional)
+// -------------------------------------------------------
 function actionCrearProducto(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $nombre = trim((string)($_POST['nombre'] ?? ''));
+    $precio = $_POST['precio'] ?? '';
+    $categoria_id = (int)($_POST['categoria_id'] ?? 0);
+    $stock = $_POST['stock'] ?? '';
+
+    // --- Validaciones ---
+    if ($nombre === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El nombre del producto es obligatorio.']);
+        return;
+    }
+    if ($precio === '' || !is_numeric($precio) || (float)$precio <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El precio debe ser un número mayor a 0.']);
+        return;
+    }
+    if ($categoria_id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Debe seleccionar una categoría.']);
+        return;
+    }
+    if ($stock === '' || !is_numeric($stock) || (int)$stock < 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El stock debe ser un número mayor o igual a 0.']);
+        return;
+    }
+
+    // --- Manejo de imagen ---
+    $imagen = null;
+    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
+        $resultado = procesarImagen($_FILES['imagen']);
+        if (!$resultado['success']) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $resultado['error']]);
+            return;
+        }
+        $imagen = $resultado['filename'];
+    } elseif (isset($_FILES['imagen']) && $_FILES['imagen']['error'] !== UPLOAD_ERR_NO_FILE) {
+        // Error de upload que no es "no file" — ej. excede upload_max_filesize
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Error al subir la imagen.']);
+        return;
+    }
+    // UPLOAD_ERR_NO_FILE o no hay $_FILES['imagen'] → imagen queda NULL
+
+    try {
+        $stmt = $pdo->prepare(
+            "INSERT INTO productos (nombre, precio, categoria_id, stock, imagen) VALUES (?, ?, ?, ?, ?)"
+        );
+        $stmt->execute([$nombre, (float)$precio, $categoria_id, (int)$stock, $imagen]);
+        $id = (int)$pdo->lastInsertId();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Producto creado.',
+            'id' => $id,
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// POST ?action=editar_producto — Edita producto (multipart/form-data)
+// Campos: id, nombre, precio, categoria_id, stock, imagen (file, opcional)
+// Si no se sube nueva imagen, se mantiene la actual.
+// -------------------------------------------------------
 function actionEditarProducto(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $id = (int)($_POST['id'] ?? 0);
+    $nombre = trim((string)($_POST['nombre'] ?? ''));
+    $precio = $_POST['precio'] ?? '';
+    $categoria_id = (int)($_POST['categoria_id'] ?? 0);
+    $stock = $_POST['stock'] ?? '';
+
+    // --- Validaciones ---
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de producto no válido.']);
+        return;
+    }
+    if ($nombre === '') {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El nombre del producto es obligatorio.']);
+        return;
+    }
+    if ($precio === '' || !is_numeric($precio) || (float)$precio <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El precio debe ser un número mayor a 0.']);
+        return;
+    }
+    if ($categoria_id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Debe seleccionar una categoría.']);
+        return;
+    }
+    if ($stock === '' || !is_numeric($stock) || (int)$stock < 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'El stock debe ser un número mayor o igual a 0.']);
+        return;
+    }
+
+    // --- Manejo de imagen (opcional: solo si se subió una nueva) ---
+    $imagenSet = '';
+    $imagenValue = null;
+    $oldImagen = null;
+
+    if (isset($_FILES['imagen']) && $_FILES['imagen']['error'] === UPLOAD_ERR_OK) {
+        // Consultar imagen actual para eliminarla después del update
+        $stmt = $pdo->prepare("SELECT imagen FROM productos WHERE id = ?");
+        $stmt->execute([$id]);
+        $row = $stmt->fetch();
+        $oldImagen = $row ? $row['imagen'] : null;
+
+        $resultado = procesarImagen($_FILES['imagen']);
+        if (!$resultado['success']) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => $resultado['error']]);
+            return;
+        }
+        $imagenValue = $resultado['filename'];
+        $imagenSet = ', imagen = ?';
+    } elseif (isset($_FILES['imagen']) && $_FILES['imagen']['error'] !== UPLOAD_ERR_NO_FILE) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Error al subir la imagen.']);
+        return;
+    }
+    // Si no hay nueva imagen → no tocar columna imagen
+
+    try {
+        $sql = "UPDATE productos SET nombre = ?, precio = ?, categoria_id = ?, stock = ?{$imagenSet} WHERE id = ?";
+        $params = [$nombre, (float)$precio, $categoria_id, (int)$stock];
+        if ($imagenValue !== null) {
+            $params[] = $imagenValue;
+        }
+        $params[] = $id;
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        if ($stmt->rowCount() === 0) {
+            // Verificar si el producto existe o si los datos son idénticos
+            $check = $pdo->prepare("SELECT COUNT(*) FROM productos WHERE id = ?");
+            $check->execute([$id]);
+            if ((int)$check->fetchColumn() === 0) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'error' => 'Producto no encontrado.']);
+                return;
+            }
+            // Existe pero datos idénticos — éxito idempotente
+        }
+
+        // Eliminar imagen anterior si se reemplazó
+        if ($oldImagen !== null) {
+            $oldFile = __DIR__ . '/img/' . $oldImagen;
+            if (file_exists($oldFile)) {
+                @unlink($oldFile);
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Producto actualizado.',
+        ]);
+    } catch (PDOException $e) {
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
+// -------------------------------------------------------
+// POST ?action=eliminar_producto — Elimina producto con FK guard
+// Body JSON: { id }
+// Si el producto tiene órdenes en orden_detalles, PDOException 23000 → 409
+// -------------------------------------------------------
 function actionEliminarProducto(PDO $pdo): void {
-    http_response_code(501);
-    echo json_encode(['success' => false, 'error' => 'Acción no implementada aún.']);
+    if (($_SERVER['REQUEST_METHOD'] ?? 'POST') !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['success' => false, 'error' => 'Método no permitido. Use POST.']);
+        return;
+    }
+
+    $input = json_decode(file_get_contents('php://input'), true) ?? [];
+    $id = (int)($input['id'] ?? 0);
+
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'ID de producto no válido.']);
+        return;
+    }
+
+    // Consultar imagen actual para eliminar archivo
+    $stmt = $pdo->prepare("SELECT imagen FROM productos WHERE id = ?");
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    $imagen = $row ? $row['imagen'] : null;
+
+    try {
+        $stmt = $pdo->prepare("DELETE FROM productos WHERE id = ?");
+        $stmt->execute([$id]);
+
+        if ($stmt->rowCount() === 0) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Producto no encontrado.']);
+            return;
+        }
+
+        // Eliminar archivo de imagen si existe
+        if ($imagen !== null) {
+            $filePath = __DIR__ . '/img/' . $imagen;
+            if (file_exists($filePath)) {
+                @unlink($filePath);
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Producto eliminado.',
+        ]);
+    } catch (PDOException $e) {
+        // FK RESTRICT: producto_referenciado en orden_detalles
+        if ($e->getCode() == 23000) {
+            http_response_code(409);
+            echo json_encode([
+                'success' => false,
+                'error' => 'No se puede eliminar: el producto tiene órdenes asociadas.',
+            ]);
+            return;
+        }
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'Error interno del servidor.']);
+    }
 }
 
 function actionReporteVentas(PDO $pdo): void {
