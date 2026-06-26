@@ -107,13 +107,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             <form class="form-content" id="login-form" method="POST" action="login.php">
                 <div class="input-group">
-                    <label>Email Address</label>
+                    <label>Correo electrónico</label>
                     <input name="email" id="email" type="email" placeholder="Correo electrónico" required value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>">
                 </div>
 
                 <div class="input-group">
                     <div class="label-row">
-                        <label>Password</label>
+                        <label>Contraseña</label>
                         <a href="recuperar.php" class="link-green">¿Olvidaste tu contraseña?</a>
                     </div>
                     <input name="password" id="password" type="password" placeholder="Contraseña" required>
