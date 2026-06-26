@@ -100,7 +100,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <img src="https://img.icons8.com/ios-filled/50/70ffbd/cash-register.png" alt="Icono POS" width="30">
                 </div>
                 <h1>Flui</h1>
-                <p class="subtitle">Essential POS System</p>
+                <p class="subtitle">Inicio de sesión</p>
             </div>
 
             <?php echo $mensaje; ?>
