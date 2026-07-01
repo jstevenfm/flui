@@ -1,7 +1,12 @@
 :8080 {
 	root * /app
+	
+	# Procesar archivos PHP
+	php_fastcgi localhost:9000 {
+		split .php
+	}
+	
+	# Servir archivos estáticos
 	file_server
-	php_fastcgi localhost:9000
-	try_files {path} {path}/ /index.html
 }
 
